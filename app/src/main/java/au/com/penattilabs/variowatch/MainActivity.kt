@@ -18,6 +18,8 @@ import androidx.core.content.ContextCompat
 class MainActivity : ComponentActivity() {
     private var isVarioRunning by mutableStateOf(false)
     private var currentPressure by mutableStateOf(0f)
+    private var showSettings by mutableStateOf(false)
+    private lateinit var userPreferences: UserPreferences
 
     private val pressureReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -29,6 +31,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        userPreferences = UserPreferences(this)
+        
         ContextCompat.registerReceiver(
             this,
             pressureReceiver,
@@ -37,13 +41,27 @@ class MainActivity : ComponentActivity() {
         )
 
         setContent {
-            HomeScreen(
-                isVarioRunning = isVarioRunning,
-                currentPressure = currentPressure,
-                onStartClick = { startVarioService() },
-                onStopClick = { stopVarioService() },
-                onSettingsClick = { /* TODO: Navigate to settings */ }
-            )
+            MaterialTheme {
+                if (showSettings) {
+                    SettingsScreen(
+                        useMetricUnits = userPreferences.useMetricUnits,
+                        onToggleUnits = { userPreferences.toggleUnitSystem() },
+                        onBackClick = { showSettings = false },
+                        qnh = userPreferences.qnh,
+                        onQnhChange = { userPreferences.qnh = it },
+                        currentAltitude = userPreferences.manualAltitude,
+                        onSetCurrentAltitude = { userPreferences.manualAltitude = it }
+                    )
+                } else {
+                    HomeContent(
+                        isVarioRunning = isVarioRunning,
+                        currentPressure = currentPressure,
+                        onStartClick = { startVarioService() },
+                        onStopClick = { stopVarioService() },
+                        onSettingsClick = { showSettings = true }
+                    )
+                }
+            }
         }
     }
 
@@ -61,47 +79,142 @@ class MainActivity : ComponentActivity() {
         stopService(Intent(this, VarioService::class.java))
         isVarioRunning = false
     }
+
+    @Composable
+    private fun HomeContent(
+        isVarioRunning: Boolean,
+        currentPressure: Float,
+        onStartClick: () -> Unit,
+        onStopClick: () -> Unit,
+        onSettingsClick: () -> Unit
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            if (!isVarioRunning) {
+                Button(
+                    onClick = onStartClick,
+                    modifier = Modifier
+                        .padding(bottom = 8.dp)
+                        .fillMaxWidth(0.8f),
+                    colors = ButtonDefaults.primaryButtonColors()
+                ) {
+                    Text(text = "Start Vario")
+                }
+
+                Button(
+                    onClick = onSettingsClick,
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .fillMaxWidth(0.8f),
+                    colors = ButtonDefaults.secondaryButtonColors()
+                ) {
+                    Text(text = "Settings")
+                }
+            } else {
+                val altitude = userPreferences.manualAltitude ?: 
+                    AltitudeCalculator.calculateAltitude(currentPressure, userPreferences.qnh)
+                
+                Text(
+                    text = AltitudeCalculator.formatAltitude(altitude, userPreferences.useMetricUnits),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                
+                Text(
+                    text = "Pressure: %.2f hPa".format(currentPressure),
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                Button(
+                    onClick = onStopClick,
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .fillMaxWidth(0.8f),
+                    colors = ButtonDefaults.primaryButtonColors()
+                ) {
+                    Text(text = "Stop")
+                }
+            }
+        }
+    }
 }
 
 @Composable
-fun HomeScreen(
-    isVarioRunning: Boolean,
-    currentPressure: Float,
-    onStartClick: () -> Unit,
-    onStopClick: () -> Unit,
-    onSettingsClick: () -> Unit
+fun SettingsScreen(
+    useMetricUnits: Boolean,
+    onToggleUnits: () -> Unit,
+    onBackClick: () -> Unit,
+    qnh: Float,
+    onQnhChange: (Float) -> Unit,
+    currentAltitude: Float?,
+    onSetCurrentAltitude: (Float?) -> Unit
 ) {
     Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (!isVarioRunning) {
-            Button(
-                onClick = onStartClick,
-                modifier = Modifier.padding(bottom = 8.dp)
-            ) {
-                Text(text = "Start Vario")
-            }
+        Text(
+            text = "Settings",
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
 
-            Button(
-                onClick = onSettingsClick,
-                modifier = Modifier.padding(top = 8.dp)
-            ) {
-                Text(text = "Settings")
-            }
-        } else {
+        Button(
+            onClick = onToggleUnits,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+        ) {
+            Text(text = if (useMetricUnits) "Using Metric" else "Using Imperial")
+        }
+
+        Text(
+            text = "QNH (hPa)",
+            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+        )
+        
+        Button(
+            onClick = { onQnhChange(qnh + 0.25f) },
+            modifier = Modifier.padding(vertical = 4.dp)
+        ) {
+            Text(text = "▲")
+        }
+        
+        Text(
+            text = "%.2f".format(qnh),
+            modifier = Modifier.padding(vertical = 8.dp)
+        )
+        
+        Button(
+            onClick = { onQnhChange(qnh - 0.25f) },
+            modifier = Modifier.padding(vertical = 4.dp)
+        ) {
+            Text(text = "▼")
+        }
+
+        if (currentAltitude != null) {
             Text(
-                text = "Pressure: %.2f hPa".format(currentPressure),
-                modifier = Modifier.padding(bottom = 16.dp)
+                text = "Manual Altitude Set",
+                modifier = Modifier.padding(top = 16.dp)
             )
-
             Button(
-                onClick = onStopClick,
-                modifier = Modifier.padding(top = 8.dp)
+                onClick = { onSetCurrentAltitude(null) },
+                modifier = Modifier.padding(vertical = 8.dp)
             ) {
-                Text(text = "Stop")
+                Text(text = "Clear Manual Altitude")
             }
+        }
+
+        Button(
+            onClick = onBackClick,
+            modifier = Modifier
+                .padding(top = 16.dp)
+                .fillMaxWidth()
+        ) {
+            Text(text = "Back")
         }
     }
 }
