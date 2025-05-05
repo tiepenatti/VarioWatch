@@ -17,6 +17,7 @@ class VarioService : Service(), SensorEventListener {
     private var pressureSensor: Sensor? = null
     private lateinit var userPreferences: UserPreferences
     private var currentPressure = 0f
+    var currentAltitude = 0f  // Made public for testing
 
     companion object {
         const val ACTION_PRESSURE_UPDATE = "au.com.penattilabs.variowatch.PRESSURE_UPDATE"
@@ -27,9 +28,7 @@ class VarioService : Service(), SensorEventListener {
     override fun onCreate() {
         super.onCreate()
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        // Try to get both virtual and physical pressure sensors
-        pressureSensor = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE, true) // Try virtual sensor first
-            ?: sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE) // Fall back to physical sensor
+        pressureSensor = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)
         
         android.util.Log.d(TAG, "Pressure sensor available: ${pressureSensor != null}")
         if (pressureSensor != null) {
@@ -79,6 +78,7 @@ class VarioService : Service(), SensorEventListener {
             if (it.sensor.type == Sensor.TYPE_PRESSURE) {
                 val pressure = it.values[0]
                 android.util.Log.d(TAG, "Received pressure: $pressure hPa")
+                currentAltitude = AltitudeCalculator.calculateAltitude(pressure, Constants.ISA_PRESSURE_SEA_LEVEL)
                 handlePressureReading(pressure)
             }
         }

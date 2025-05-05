@@ -13,6 +13,7 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildFeatures {
@@ -44,6 +45,19 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    sourceSets {
+        getByName("test") {
+            java.srcDirs("src/test/java")
+        }
+    }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {
@@ -68,4 +82,21 @@ dependencies {
     implementation("androidx.percentlayout:percentlayout:1.0.0")
     implementation("androidx.legacy:legacy-support-v4:1.0.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
+
+    // Testing dependencies
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlin:kotlin-test:1.9.21")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:1.9.21")
+    testImplementation("io.mockk:mockk-android:1.13.8")
+    testImplementation("io.mockk:mockk-agent:1.13.8")
+    testImplementation("org.robolectric:robolectric:4.11.1")
+    testImplementation("org.robolectric:shadows-framework:4.11.1")
+    testImplementation("androidx.test:core-ktx:1.5.0")
+    testImplementation("androidx.test.ext:junit-ktx:1.1.5")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+    testImplementation("android.arch.core:core-testing:1.1.1")
+    
+    // Android test dependencies
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 }
