@@ -1,8 +1,12 @@
 package au.com.penattilabs.variowatch
 
+/**
+ * Application-wide constants including sensor configuration, physical constants, and UI settings.
+ */
 object Constants {
     // Service constants
-    const val SENSOR_SAMPLING_PERIOD_US = 100000 // 100ms sampling period (10Hz)
+    const val SENSOR_SAMPLING_PERIOD_US = 200000 // 200ms sampling period (5Hz) for better battery life
+    const val SENSOR_BATCH_LATENCY_US = 1000000 // 1s batching for power efficiency
     const val SERVICE_NOTIFICATION_ID = 1
     const val NOTIFICATION_CHANNEL_ID = "vario_service_channel"
     const val NOTIFICATION_CHANNEL_NAME = "Vario Service"
@@ -21,4 +25,8 @@ object Constants {
     // Altitude adjustment steps
     const val METRIC_ALTITUDE_STEP = 10f  // meters
     const val IMPERIAL_ALTITUDE_STEP = 25f  // feet
+
+    // Battery optimization constants
+    const val SENSOR_BATCH_SIZE = 5  // Number of samples to batch before processing
+    const val SENSOR_WARMUP_TIME_MS = 500L  // Time to wait for sensor to stabilize
 }

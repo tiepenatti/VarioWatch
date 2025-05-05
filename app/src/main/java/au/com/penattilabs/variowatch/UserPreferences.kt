@@ -7,6 +7,8 @@ class UserPreferences(context: Context) : android.os.Parcelable {
     companion object {
         const val PREFERENCES_KEY = "user_preferences"
         private const val PREF_NAME = "vario_prefs"
+        private const val KEY_USE_METRIC_UNITS = "use_metric_units"
+        private const val KEY_QNH = "qnh"
         private lateinit var applicationContext: Context
         
         @JvmField
@@ -37,14 +39,14 @@ class UserPreferences(context: Context) : android.os.Parcelable {
     )
 
     var useMetricUnits: Boolean
-        get() = sharedPreferences.getBoolean("use_metric_units", true)
-        private set(value) = sharedPreferences.edit().putBoolean("use_metric_units", value).apply()
+        get() = sharedPreferences.getBoolean(KEY_USE_METRIC_UNITS, true)
+        private set(value) = sharedPreferences.edit().putBoolean(KEY_USE_METRIC_UNITS, value).apply()
 
     var qnh: Float = Constants.ISA_PRESSURE_SEA_LEVEL
-        get() = sharedPreferences.getFloat("qnh", field)
+        get() = sharedPreferences.getFloat(KEY_QNH, field)
         private set(value) {
             field = value
-            sharedPreferences.edit().putFloat("qnh", value).apply()
+            sharedPreferences.edit().putFloat(KEY_QNH, value).apply()
         }
 
     var currentAltitude: Float = 0f

@@ -20,6 +20,10 @@ import kotlin.test.assertNotNull
 
 @RunWith(RobolectricTestRunner::class)
 class VarioServiceTest {
+    private companion object {
+        private const val ALTITUDE_ASSERT_DELTA = 0.1f
+    }
+
     private lateinit var service: VarioService
     
     @RelaxedMockK
@@ -63,8 +67,8 @@ class VarioServiceTest {
 
     @Test
     fun `test sensor updates trigger pressure updates`() {
-        val pressure = 1013.25f
-        val qnh = 1013.25f
+        val pressure = Constants.ISA_PRESSURE_SEA_LEVEL
+        val qnh = Constants.ISA_PRESSURE_SEA_LEVEL
         val expectedAltitude = 0f
 
         every { mockUserPreferences.qnh } returns qnh
@@ -80,7 +84,7 @@ class VarioServiceTest {
         service.onSensorChanged(mockEvent)
 
         verify { mockUserPreferences.updateCurrentAltitude(pressure) }
-        assertEquals(expectedAltitude, service.currentAltitude, 0.1f)
+        assertEquals(expectedAltitude, service.currentAltitude, ALTITUDE_ASSERT_DELTA)
     }
 
     @Test
