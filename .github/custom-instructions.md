@@ -138,4 +138,10 @@
 - Verify background operation
 - Review battery impact
 
+## Build System
+
+### Gradle Commands
+- Always use `--no-daemon` flag with gradlew commands to avoid file locking issues
+- Example: `./gradlew clean --no-daemon`, `./gradlew build --no-daemon`
+
 Remember to update these guidelines as the project evolves and new best practices emerge.

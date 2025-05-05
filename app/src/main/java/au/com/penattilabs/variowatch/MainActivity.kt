@@ -18,7 +18,6 @@ import androidx.core.content.ContextCompat
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
-import androidx.wear.compose.foundation.lazy.ScalingLazyListScope
 
 class MainActivity : ComponentActivity() {
     private var isVarioRunning by mutableStateOf(false)
@@ -43,7 +42,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        userPreferences = UserPreferences(this)
+        userPreferences = (application as VarioWatchApplication).userPreferences
         
         ContextCompat.registerReceiver(
             this,
@@ -129,7 +128,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startVarioService() {
-        startService(Intent(this, VarioService::class.java))
+        val serviceIntent = VarioService.createIntent(this)
+        startService(serviceIntent)
         isVarioRunning = true
     }
 

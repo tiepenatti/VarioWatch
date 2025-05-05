@@ -23,12 +23,17 @@ class VarioService : Service(), SensorEventListener {
         const val ACTION_PRESSURE_UPDATE = "au.com.penattilabs.variowatch.PRESSURE_UPDATE"
         const val EXTRA_PRESSURE = "pressure"
         private const val TAG = "VarioService"
+
+        fun createIntent(context: Context): Intent {
+            return Intent(context, VarioService::class.java)
+        }
     }
 
     override fun onCreate() {
         super.onCreate()
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         pressureSensor = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)
+        userPreferences = (application as VarioWatchApplication).userPreferences
         
         android.util.Log.d(TAG, "Pressure sensor available: ${pressureSensor != null}")
         if (pressureSensor != null) {
@@ -36,7 +41,6 @@ class VarioService : Service(), SensorEventListener {
                 "type: ${pressureSensor?.type}, vendor: ${pressureSensor?.vendor}, version: ${pressureSensor?.version}")
         }
         
-        userPreferences = UserPreferences(this)
         createNotificationChannel()
         startForeground(Constants.SERVICE_NOTIFICATION_ID, createNotification())
     }
@@ -73,18 +77,31 @@ class VarioService : Service(), SensorEventListener {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+        // Not used in this implementation
+    }
+
     override fun onSensorChanged(event: SensorEvent?) {
         event?.let {
             if (it.sensor.type == Sensor.TYPE_PRESSURE) {
                 val pressure = it.values[0]
                 android.util.Log.d(TAG, "Received pressure: $pressure hPa")
-                currentAltitude = AltitudeCalculator.calculateAltitude(pressure, Constants.ISA_PRESSURE_SEA_LEVEL)
+                currentAltitude = AltitudeCalculator.calculateAltitude(pressure, userPreferences.qnh)
                 handlePressureReading(pressure)
             }
         }
     }
 
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+    private fun handlePressureReading(pressureHpa: Float) {
+        currentPressure = pressureHpa
+        userPreferences.updateCurrentAltitude(pressureHpa)
+
+        val intent = Intent(ACTION_PRESSURE_UPDATE).apply {
+            putExtra(EXTRA_PRESSURE, pressureHpa)
+        }
+        sendBroadcast(intent)
+        android.util.Log.d(TAG, "Broadcast pressure update: $pressureHpa hPa")
+    }
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
@@ -102,15 +119,4 @@ class VarioService : Service(), SensorEventListener {
         .setSmallIcon(android.R.drawable.ic_menu_compass)
         .setOngoing(true)
         .build()
-
-    private fun handlePressureReading(pressureHpa: Float) {
-        currentPressure = pressureHpa
-        userPreferences.updateCurrentAltitude(pressureHpa)
-
-        val intent = Intent(ACTION_PRESSURE_UPDATE).apply {
-            putExtra(EXTRA_PRESSURE, pressureHpa)
-        }
-        sendBroadcast(intent)
-        android.util.Log.d(TAG, "Broadcast pressure update: $pressureHpa hPa")
-    }
 }

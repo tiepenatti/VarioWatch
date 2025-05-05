@@ -3,21 +3,60 @@ package au.com.penattilabs.variowatch
 import android.content.Context
 import android.content.SharedPreferences
 
-class UserPreferences(context: Context) {
-    private val sharedPreferences: SharedPreferences = context.getSharedPreferences(
-        "vario_prefs", Context.MODE_PRIVATE
+class UserPreferences(context: Context) : android.os.Parcelable {
+    companion object {
+        const val PREFERENCES_KEY = "user_preferences"
+        private const val PREF_NAME = "vario_prefs"
+        private lateinit var applicationContext: Context
+        
+        @JvmField
+        val CREATOR = object : android.os.Parcelable.Creator<UserPreferences> {
+            override fun createFromParcel(parcel: android.os.Parcel): UserPreferences {
+                return UserPreferences(applicationContext).also {
+                    it.currentAltitude = parcel.readFloat()
+                    it.useMetricUnits = parcel.readInt() == 1
+                    it.qnh = parcel.readFloat()
+                }
+            }
+
+            override fun newArray(size: Int): Array<UserPreferences?> {
+                return arrayOfNulls(size)
+            }
+        }
+    }
+    
+    init {
+        // Store application context for Parcelable recreation
+        applicationContext = context.applicationContext
+    }
+    
+    // Use application context to avoid memory leaks
+    private val appContext = context.applicationContext
+    private val sharedPreferences: SharedPreferences = appContext.getSharedPreferences(
+        PREF_NAME, Context.MODE_PRIVATE
     )
 
     var useMetricUnits: Boolean
         get() = sharedPreferences.getBoolean("use_metric_units", true)
         private set(value) = sharedPreferences.edit().putBoolean("use_metric_units", value).apply()
 
-    var qnh: Float
-        get() = sharedPreferences.getFloat("qnh", Constants.ISA_PRESSURE_SEA_LEVEL)
-        private set(value) = sharedPreferences.edit().putFloat("qnh", value).apply()
+    var qnh: Float = Constants.ISA_PRESSURE_SEA_LEVEL
+        get() = sharedPreferences.getFloat("qnh", field)
+        private set(value) {
+            field = value
+            sharedPreferences.edit().putFloat("qnh", value).apply()
+        }
 
     var currentAltitude: Float = 0f
         private set
+
+    override fun writeToParcel(parcel: android.os.Parcel, flags: Int) {
+        parcel.writeFloat(currentAltitude)
+        parcel.writeInt(if (useMetricUnits) 1 else 0)
+        parcel.writeFloat(qnh)
+    }
+
+    override fun describeContents(): Int = 0
 
     fun toggleUnitSystem() {
         useMetricUnits = !useMetricUnits
@@ -32,11 +71,10 @@ class UserPreferences(context: Context) {
     }
 
     fun adjustAltitude(increase: Boolean) {
-        val step = if (useMetricUnits) {
+        val step = if (useMetricUnits) 
             Constants.METRIC_ALTITUDE_STEP
-        } else {
+        else 
             Constants.IMPERIAL_ALTITUDE_STEP / Constants.METERS_TO_FEET // Convert feet to meters
-        }
         
         currentAltitude += if (increase) step else -step
     }

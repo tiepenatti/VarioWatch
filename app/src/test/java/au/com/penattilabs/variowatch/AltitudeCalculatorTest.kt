@@ -30,10 +30,10 @@ class AltitudeCalculatorTest {
 
     @Test
     fun `given known altitude when calculating QNH then return correct pressure`() {
-        // At 1000m with 915 hPa, QNH should be around 1040 hPa
-        // This follows the standard pressure lapse rate of roughly -1 hPa per 8.5m
+        // At 1000m with 915 hPa, QNH should be around 1033 hPa
+        // This matches standard atmosphere calculations using hypsometric equation
         val qnh = AltitudeCalculator.calculateQnhFromAltitude(915f, 1000f)
-        assertEquals(1040f, qnh, 5f) // Allow 5 hPa tolerance for different calculation methods
+        assertEquals(1033f, qnh, 5f) // Allow 5 hPa tolerance for different calculation methods
     }
 
     @Test

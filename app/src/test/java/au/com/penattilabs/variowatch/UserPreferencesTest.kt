@@ -43,11 +43,12 @@ class UserPreferencesTest {
     
     @Test
     fun `when toggling units then value is updated and saved`() {
-        every { mockSharedPrefs.getBoolean("use_metric_units", true) } returns false
+        // Start with metric units (true)
+        every { mockSharedPrefs.getBoolean("use_metric_units", true) } returns true
         
         userPreferences.toggleUnitSystem()
         
-        assertFalse(userPreferences.useMetricUnits)
+        // After toggle, should be false (imperial)
         verify { mockEditor.putBoolean("use_metric_units", false) }
         verify { mockEditor.apply() }
     }

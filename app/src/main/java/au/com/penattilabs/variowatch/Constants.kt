@@ -11,8 +11,9 @@ object Constants {
     const val ISA_TEMPERATURE_SEA_LEVEL = 288.15f    // Standard temperature at sea level (K)
     const val ISA_PRESSURE_SEA_LEVEL = 1013.25f   // Standard pressure at sea level (hPa)
     const val ISA_TEMPERATURE_LAPSE_RATE = 0.0065f     // Temperature lapse rate (K/m)
-    const val ISA_GAS_CONSTANT_AIR = 287.053f    // Gas constant for air (J/(kg·K))
+    const val ISA_GAS_CONSTANT_AIR = 8.31446f    // Universal gas constant (J/(mol·K))
     const val ISA_GRAVITATIONAL_ACCELERATION = 9.80665f    // Gravitational acceleration (m/s²)
+    const val ISA_MOLAR_MASS_AIR = 0.0289644f    // Molar mass of air (kg/mol)
     
     // Conversion constants
     const val METERS_TO_FEET = 3.28084f

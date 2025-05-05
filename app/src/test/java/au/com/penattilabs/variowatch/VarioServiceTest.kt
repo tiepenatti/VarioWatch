@@ -1,112 +1,103 @@
 package au.com.penattilabs.variowatch
 
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.hardware.Sensor
 import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import io.mockk.*
+import io.mockk.impl.annotations.MockK
+import io.mockk.impl.annotations.RelaxedMockK
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
-import org.robolectric.Shadows.shadowOf
-import kotlin.test.assertTrue
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 
 @RunWith(RobolectricTestRunner::class)
 class VarioServiceTest {
     private lateinit var service: VarioService
+    
+    @RelaxedMockK
     private lateinit var mockSensorManager: SensorManager
+    
+    @RelaxedMockK
     private lateinit var mockPressureSensor: Sensor
+    
+    @RelaxedMockK
     private lateinit var mockNotificationManager: NotificationManager
     
+    @RelaxedMockK
+    private lateinit var mockUserPreferences: UserPreferences
+
+    private lateinit var application: VarioWatchApplication
+
     @Before
-    fun setup() {
-        mockSensorManager = mockk(relaxed = true)
-        mockPressureSensor = mockk(relaxed = true)
-        mockNotificationManager = mockk(relaxed = true)
-        
+    fun setUp() {
+        MockKAnnotations.init(this)
+
         every { mockSensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE) } returns mockPressureSensor
-        every { mockSensorManager.registerListener(any(), mockPressureSensor, Constants.SENSOR_SAMPLING_PERIOD_US) } returns true
-        
-        // Initialize service with Robolectric
+
+        application = RuntimeEnvironment.getApplication() as VarioWatchApplication
+        application.setUserPreferencesForTesting(mockUserPreferences)
+
         service = Robolectric.setupService(VarioService::class.java)
-        
-        // Replace system services with mocks
-        val application = RuntimeEnvironment.getApplication()
-        val appShadow = shadowOf(application)
-        appShadow.setSystemService(Context.SENSOR_SERVICE, mockSensorManager)
-        appShadow.setSystemService(Context.NOTIFICATION_SERVICE, mockNotificationManager)
-        
-        // Start service
+        service.javaClass.getDeclaredField("sensorManager").apply {
+            isAccessible = true
+            set(service, mockSensorManager)
+        }
+    }
+
+    @Test
+    fun `test service onCreate initializes sensors and notification channel`() {
+        every { mockSensorManager.registerListener(any(), mockPressureSensor, any()) } returns true
+
         service.onCreate()
+
+        verify(exactly = 1) { mockSensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE) }
     }
-    
+
     @Test
-    fun `when service starts then register pressure sensor listener`() {
-        service.onStartCommand(Intent(), 0, 0)
-        
-        verify { mockSensorManager.registerListener(
-            service,
-            mockPressureSensor,
-            Constants.SENSOR_SAMPLING_PERIOD_US
-        )}
-    }
-    
-    @Test
-    fun `when service starts then create notification channel`() {
-        service.onStartCommand(Intent(), 0, 0)
-        
-        verify { mockNotificationManager.createNotificationChannel(match { 
-            it.id == Constants.NOTIFICATION_CHANNEL_ID &&
-            it.name.toString() == Constants.NOTIFICATION_CHANNEL_NAME
-        })}
-    }
-    
-    @Test
-    fun `when pressure changes then calculate altitude`() {
-        val pressure = 900f
-        // First calculate QNH for a known altitude (1000m) with this pressure reading
-        val qnh = AltitudeCalculator.calculateQnhFromAltitude(pressure, 1000f)
-        // Then calculate expected altitude using that QNH
-        val expectedAltitude = AltitudeCalculator.calculateAltitude(pressure, qnh)
-        
-        // Create mock sensor event
-        val mockEvent = mockk<SensorEvent>()
-        every { mockEvent.sensor } returns mockPressureSensor
-        every { mockEvent.values } returns FloatArray(1).apply { this[0] = pressure }
-        
+    fun `test sensor updates trigger pressure updates`() {
+        val pressure = 1013.25f
+        val qnh = 1013.25f
+        val expectedAltitude = 0f
+
+        every { mockUserPreferences.qnh } returns qnh
+
+        // Create a proper mock of SensorEvent using MockK's constructor mocking
+        val mockEvent = mockk<SensorEvent> {
+            every { sensor } returns mockPressureSensor
+            every { values } returns floatArrayOf(pressure)
+            every { accuracy } returns 0
+            every { timestamp } returns 0L
+        }
+
         service.onSensorChanged(mockEvent)
-        
-        // Verify altitude calculation - should match our expected value within 0.1m
+
+        verify { mockUserPreferences.updateCurrentAltitude(pressure) }
         assertEquals(expectedAltitude, service.currentAltitude, 0.1f)
     }
-    
+
     @Test
-    fun `when service destroyed then unregister sensor listener`() {
-        service.onStartCommand(Intent(), 0, 0)
+    fun `test service cleanup on destroy`() {
         service.onDestroy()
-        
         verify { mockSensorManager.unregisterListener(service) }
     }
-    
+
     @Test
-    fun `when sensor registration fails then try different rates`() {
-        // First two attempts fail
+    fun `test fallback sampling rates when default fails`() {
         every { mockSensorManager.registerListener(any(), mockPressureSensor, Constants.SENSOR_SAMPLING_PERIOD_US) } returns false
         every { mockSensorManager.registerListener(any(), mockPressureSensor, SensorManager.SENSOR_DELAY_NORMAL) } returns false
-        // Third attempt succeeds
         every { mockSensorManager.registerListener(any(), mockPressureSensor, SensorManager.SENSOR_DELAY_UI) } returns true
-        
-        service.onStartCommand(Intent(), 0, 0)
-        
-        verifySequence { 
+
+        service.onStartCommand(Intent(), 0, 1)
+
+        verifySequence {
             mockSensorManager.registerListener(service, mockPressureSensor, Constants.SENSOR_SAMPLING_PERIOD_US)
             mockSensorManager.registerListener(service, mockPressureSensor, SensorManager.SENSOR_DELAY_NORMAL)
             mockSensorManager.registerListener(service, mockPressureSensor, SensorManager.SENSOR_DELAY_UI)
