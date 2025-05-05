@@ -13,6 +13,11 @@ object AltitudeCalculator {
         return ((T0 / L) * (1 - Math.pow((pressure / qnh).toDouble(), (R * L) / g))).toFloat()
     }
 
+    fun calculateQnhFromAltitude(pressure: Float, knownAltitude: Float): Float {
+        // Rearranged barometric formula to solve for QNH
+        return pressure / Math.pow(1 - (knownAltitude * L / T0), g / (R * L)).toFloat()
+    }
+
     fun formatAltitude(altitude: Float, useMetric: Boolean): String {
         return if (useMetric) {
             "%.0f m".format(altitude)
