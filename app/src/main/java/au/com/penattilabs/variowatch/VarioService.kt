@@ -17,6 +17,8 @@ class VarioService : Service() {
     companion object {
         const val ACTION_PRESSURE_UPDATE = "au.com.penattilabs.variowatch.PRESSURE_UPDATE"
         const val EXTRA_PRESSURE = "pressure"
+        const val EXTRA_ALTITUDE = "altitude"
+        const val EXTRA_VERTICAL_SPEED = "vertical_speed"
         private const val TAG = "VarioService"
 
         fun createIntent(context: Context): Intent {
@@ -38,8 +40,8 @@ class VarioService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        pressureSensorManager = PressureSensorManager(applicationContext)
         userPreferences = (applicationContext as VarioWatchApplication).userPreferences
+        pressureSensorManager = PressureSensorManager(applicationContext, userPreferences)
         
         setupNotification()
         setupSensorCollection()
@@ -84,11 +86,11 @@ class VarioService : Service() {
         serviceScope.launch {
             pressureSensorManager.sensorState
                 .onEach { state -> 
-                    state.error?.let { error ->
-                        Log.e(TAG, "Sensor error: $error")
+                    state.error?.let {
+                        Log.e(TAG, "Sensor error: $it")
                     }
                     if (state.currentPressure > 0f) {
-                        handlePressureReading(state.currentPressure)
+                        sendSensorStateUpdate(state)
                     }
                 }
                 .catch { error ->
@@ -98,13 +100,13 @@ class VarioService : Service() {
         }
     }
 
-    private fun handlePressureReading(pressureHpa: Float) {
-        if (pressureHpa == 0f) return
-
+    private fun sendSensorStateUpdate(state: PressureSensorManager.PressureSensorState) {
         val intent = Intent(ACTION_PRESSURE_UPDATE).apply {
-            putExtra(EXTRA_PRESSURE, pressureHpa)
+            putExtra(EXTRA_PRESSURE, state.currentPressure)
+            putExtra(EXTRA_ALTITUDE, state.currentAltitude)
+            putExtra(EXTRA_VERTICAL_SPEED, state.verticalSpeed)
         }
         sendBroadcast(intent)
-        Log.d(TAG, "Broadcast pressure update: $pressureHpa hPa")
+        Log.d(TAG, "Broadcast sensor state update: P=${state.currentPressure}, Alt=${state.currentAltitude}, VS=${state.verticalSpeed}")
     }
 }

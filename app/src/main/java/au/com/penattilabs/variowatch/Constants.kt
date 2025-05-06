@@ -21,6 +21,7 @@ object Constants {
     
     // Conversion constants
     const val METERS_TO_FEET = 3.28084f
+    const val METERS_PER_SECOND_TO_FEET_PER_MINUTE = METERS_TO_FEET * 60 // Added constant
 
     // Altitude adjustment steps
     const val METRIC_ALTITUDE_STEP = 10f  // meters

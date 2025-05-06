@@ -99,6 +99,25 @@ object AltitudeCalculator {
     }
 
     /**
+     * Formats a vertical speed value according to the selected unit system.
+     *
+     * @param verticalSpeed Vertical speed in meters per second (m/s)
+     * @param useMetric Whether to use metric (true) or imperial (false) units
+     * @return Formatted string with appropriate unit (m/s or ft/min)
+     */
+    fun formatVerticalSpeed(verticalSpeed: Float, useMetric: Boolean): String {
+        // Handle NaN case
+        if (verticalSpeed.isNaN()) {
+            return "---"
+        }
+        return if (useMetric) {
+            String.format("%+.1f m/s", verticalSpeed) // Show sign and one decimal place
+        } else {
+            String.format("%+.0f ft/min", verticalSpeed * Constants.METERS_PER_SECOND_TO_FEET_PER_MINUTE) // Show sign, no decimal places
+        }
+    }
+
+    /**
      * Calculates the initial altitude estimate using standard sea level temperature.
      */
     private fun calculateBasicAltitude(pressurePa: Double, qnhPa: Double): Float {

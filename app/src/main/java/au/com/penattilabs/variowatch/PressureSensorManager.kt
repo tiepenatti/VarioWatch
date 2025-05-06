@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-class PressureSensorManager(context: Context) : SensorEventListener {
+class PressureSensorManager(context: Context, private val userPreferences: UserPreferences) : SensorEventListener {
     private val sensorManager: SensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val pressureSensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)
     
@@ -20,6 +20,8 @@ class PressureSensorManager(context: Context) : SensorEventListener {
 
     private val pressureReadings = mutableListOf<Float>()
     private var warmupStartTime = 0L
+    private var lastTimestamp: Long = 0L
+    private var lastAltitude: Float = Float.NaN
 
     sealed class SensorError {
         object NoSensor : SensorError()
@@ -29,7 +31,8 @@ class PressureSensorManager(context: Context) : SensorEventListener {
 
     data class PressureSensorState(
         val currentPressure: Float = 0f,
-        val currentAltitude: Float = 0f,
+        val currentAltitude: Float = Float.NaN,
+        val verticalSpeed: Float = Float.NaN,
         val isRegistered: Boolean = false,
         val error: SensorError? = null
     )
@@ -63,6 +66,8 @@ class PressureSensorManager(context: Context) : SensorEventListener {
 
         pressureReadings.clear()
         warmupStartTime = System.currentTimeMillis()
+        lastTimestamp = 0L
+        lastAltitude = Float.NaN
 
         pressureSensor?.let { sensor ->
             val rates = listOf(
@@ -115,6 +120,9 @@ class PressureSensorManager(context: Context) : SensorEventListener {
             _sensorState.update { 
                 it.copy(
                     isRegistered = false,
+                    currentPressure = 0f,
+                    currentAltitude = Float.NaN,
+                    verticalSpeed = Float.NaN,
                     error = null
                 )
             }
@@ -125,14 +133,13 @@ class PressureSensorManager(context: Context) : SensorEventListener {
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
         if (sensor?.type == Sensor.TYPE_PRESSURE) {
             Log.d(TAG, "Pressure sensor accuracy changed to: $accuracy")
-            if (accuracy == SensorManager.SENSOR_STATUS_UNRELIABLE) {
-                _sensorState.update {
-                    it.copy(error = SensorError.AccuracyError(accuracy))
-                }
+            val currentError = if (accuracy == SensorManager.SENSOR_STATUS_UNRELIABLE || accuracy == SensorManager.SENSOR_STATUS_NO_CONTACT) {
+                 SensorError.AccuracyError(accuracy)
             } else {
-                _sensorState.update {
-                    it.copy(error = null)
-                }
+                 null
+            }
+            _sensorState.update {
+                it.copy(error = currentError)
             }
         }
     }
@@ -140,9 +147,11 @@ class PressureSensorManager(context: Context) : SensorEventListener {
     override fun onSensorChanged(event: SensorEvent?) {
         event?.let {
             if (it.sensor.type == Sensor.TYPE_PRESSURE) {
+                val currentTimestamp = it.timestamp
                 val pressure = it.values[0]
                 
                 if (System.currentTimeMillis() - warmupStartTime < Constants.SENSOR_WARMUP_TIME_MS) {
+                    Log.v(TAG, "Sensor warming up, skipping reading.")
                     return
                 }
 
@@ -151,13 +160,33 @@ class PressureSensorManager(context: Context) : SensorEventListener {
                 if (pressureReadings.size >= Constants.SENSOR_BATCH_SIZE) {
                     val medianPressure = pressureReadings.sorted()[pressureReadings.size / 2]
                     pressureReadings.clear()
+
+                    val currentAltitude = AltitudeCalculator.calculateAltitude(medianPressure, userPreferences.qnh)
+                    var verticalSpeed = Float.NaN
+
+                    if (lastTimestamp > 0L && !lastAltitude.isNaN() && !currentAltitude.isNaN()) {
+                        val timeDiffSeconds = (currentTimestamp - lastTimestamp) / 1_000_000_000.0f
+                        if (timeDiffSeconds > 0.05f) {
+                            verticalSpeed = (currentAltitude - lastAltitude) / timeDiffSeconds
+                        } else {
+                            verticalSpeed = _sensorState.value.verticalSpeed 
+                            Log.v(TAG, "Time difference too small ($timeDiffSeconds s), reusing last VS.")
+                        }
+                    } else {
+                         Log.v(TAG, "Not enough data to calculate vertical speed yet.")
+                    }
                     
                     _sensorState.update { state ->
                         state.copy(
                             currentPressure = medianPressure,
-                            error = null
+                            currentAltitude = currentAltitude,
+                            verticalSpeed = verticalSpeed,
+                            error = state.error
                         )
                     }
+
+                    lastTimestamp = currentTimestamp
+                    lastAltitude = currentAltitude
                 }
             }
         }

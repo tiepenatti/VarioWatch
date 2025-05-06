@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp // Import sp for font size
 import androidx.wear.compose.material.*
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -43,6 +44,7 @@ class MainActivity : ComponentActivity() {
         const val VERTICAL_PADDING_SMALL = 8
         const val VERTICAL_PADDING_MEDIUM = 16
         const val VERTICAL_PADDING_LARGE = 24
+        val VERTICAL_SPEED_FONT_SIZE = 36.sp // Define font size for vertical speed
     }
 
     private val _uiState = MutableStateFlow(MainActivityUiState())
@@ -58,6 +60,8 @@ class MainActivity : ComponentActivity() {
     private data class MainActivityUiState(
         val isVarioRunning: Boolean = false,
         val currentPressure: Float = UI.DEFAULT_PRESSURE,
+        val currentAltitude: Float = Float.NaN, // Add altitude
+        val verticalSpeed: Float = Float.NaN, // Add vertical speed
         val showSettings: Boolean = false
     )
 
@@ -65,8 +69,14 @@ class MainActivity : ComponentActivity() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == VarioService.ACTION_PRESSURE_UPDATE) {
                 val pressure = intent.getFloatExtra(VarioService.EXTRA_PRESSURE, UI.DEFAULT_PRESSURE)
-                android.util.Log.d(TAG, "Received broadcast pressure: $pressure hPa")
-                _uiState.update { it.copy(currentPressure = pressure) }
+                val altitude = intent.getFloatExtra(VarioService.EXTRA_ALTITUDE, Float.NaN)
+                val verticalSpeed = intent.getFloatExtra(VarioService.EXTRA_VERTICAL_SPEED, Float.NaN)
+                android.util.Log.d(TAG, "Received broadcast: P=$pressure, Alt=$altitude, VS=$verticalSpeed")
+                _uiState.update { it.copy(
+                    currentPressure = pressure,
+                    currentAltitude = altitude,
+                    verticalSpeed = verticalSpeed
+                ) }
             }
         }
     }
@@ -95,15 +105,14 @@ class MainActivity : ComponentActivity() {
                     MaterialTheme {
                         val currentUiState by uiState.collectAsState()
                         // Collect states
-                        val currentQnh by qnhState.collectAsState()
                         val currentUseMetricUnits by useMetricUnitsState.collectAsState()
 
-                        // Calculate altitude based on current pressure and QNH state
-                        val currentAltitude by remember(currentUiState.currentPressure, currentQnh) {
-                            derivedStateOf {
-                                AltitudeCalculator.calculateAltitude(currentUiState.currentPressure, currentQnh)
-                            }
-                        }
+                        // Remove altitude calculation here as it's received from the broadcast
+                        // val currentAltitude by remember(currentUiState.currentPressure, currentQnh) {
+                        //     derivedStateOf {
+                        //         AltitudeCalculator.calculateAltitude(currentUiState.currentPressure, currentQnh)
+                        //     }
+                        // }
 
                         if (currentUiState.showSettings) {
                             SettingsContent(
@@ -113,7 +122,7 @@ class MainActivity : ComponentActivity() {
                                     _useMetricUnitsState.value = userPreferences.useMetricUnits // Update state flow
                                 },
                                 onBackClick = { toggleSettings(false) },
-                                currentAltitude = currentAltitude, // Pass calculated altitude
+                                currentAltitude = currentUiState.currentAltitude, // Pass altitude from UI state
                                 onAdjustAltitude = { increase ->
                                     adjustQnhBasedOnAltitudeAdjustment(increase)
                                 }
@@ -149,12 +158,21 @@ class MainActivity : ComponentActivity() {
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
                                     ) {
+                                        // Display Vertical Speed prominently
                                         Text(
-                                            // Use calculated altitude and collected unit state
-                                            text = AltitudeCalculator.formatAltitude(currentAltitude, currentUseMetricUnits),
+                                            text = AltitudeCalculator.formatVerticalSpeed(currentUiState.verticalSpeed, currentUseMetricUnits),
+                                            style = MaterialTheme.typography.display1, // Use a large style
+                                            fontSize = UI.VERTICAL_SPEED_FONT_SIZE, // Apply custom large font size
+                                            modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_MEDIUM.dp)
+                                        )
+                                        
+                                        // Display Altitude
+                                        Text(
+                                            text = AltitudeCalculator.formatAltitude(currentUiState.currentAltitude, currentUseMetricUnits),
                                             modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
                                         )
 
+                                        // Display Pressure
                                         Text(
                                             text = stringResource(R.string.pressure_format).format(currentUiState.currentPressure),
                                             modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
@@ -218,20 +236,20 @@ class MainActivity : ComponentActivity() {
     // New function to handle QNH adjustment based on altitude steps
     private fun adjustQnhBasedOnAltitudeAdjustment(increase: Boolean) {
         val currentPressure = uiState.value.currentPressure
+        val currentAltitude = uiState.value.currentAltitude // Use altitude from state
+
         if (currentPressure <= 0f) {
             Log.w(TAG, "Cannot adjust QNH without valid pressure reading.")
             return // Cannot adjust without a valid pressure reading
         }
 
-        // Calculate current altitude using the QNH from the state flow
-        val currentAltitude = AltitudeCalculator.calculateAltitude(currentPressure, qnhState.value)
         if (currentAltitude.isNaN()) {
              Log.w(TAG, "Cannot adjust QNH with invalid current altitude.")
             return // Cannot adjust if current altitude is invalid
         }
 
         // Use the collected state for unit-dependent step calculation
-        val step = if (useMetricUnitsState.value) 
+        val step = if (_useMetricUnitsState.value) 
             Constants.METRIC_ALTITUDE_STEP
         else
             Constants.IMPERIAL_ALTITUDE_STEP / Constants.METERS_TO_FEET // Convert feet step to meters
