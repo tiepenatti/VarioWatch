@@ -12,6 +12,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onEach
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 
 class VarioService : Service() {
     companion object {
@@ -49,10 +50,16 @@ class VarioService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         pressureSensorManager.startSensor()
+        // Start the sound service
+        startService(Intent(this, SoundSynthesizerService::class.java))
+        Log.d(TAG, "SoundSynthesizerService started")
         return START_STICKY
     }
 
     override fun onDestroy() {
+        // Stop the sound service
+        stopService(Intent(this, SoundSynthesizerService::class.java))
+        Log.d(TAG, "SoundSynthesizerService stopped")
         pressureSensorManager.stopSensor()
         serviceJob.cancel()
         super.onDestroy()
@@ -106,7 +113,8 @@ class VarioService : Service() {
             putExtra(EXTRA_ALTITUDE, state.currentAltitude)
             putExtra(EXTRA_VERTICAL_SPEED, state.verticalSpeed)
         }
-        sendBroadcast(intent)
-        Log.d(TAG, "Broadcast sensor state update: P=${state.currentPressure}, Alt=${state.currentAltitude}, VS=${state.verticalSpeed}")
+        // Use LocalBroadcastManager to send the broadcast within the app
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+        Log.d(TAG, "Broadcast sensor state update (local): P=${state.currentPressure}, Alt=${state.currentAltitude}, VS=${state.verticalSpeed}")
     }
 }

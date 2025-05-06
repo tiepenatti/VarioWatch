@@ -21,9 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
-import androidx.wear.compose.foundation.lazy.items
-import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
+import androidx.localbroadcastmanager.content.LocalBroadcastManager // Ensure this import is present
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -91,12 +89,12 @@ class MainActivity : ComponentActivity() {
         _useMetricUnitsState = MutableStateFlow(userPreferences.useMetricUnits)
         useMetricUnitsState = _useMetricUnitsState.asStateFlow()
 
-        ContextCompat.registerReceiver(
-            this,
+        // Use LocalBroadcastManager to register the receiver
+        LocalBroadcastManager.getInstance(this).registerReceiver(
             pressureReceiver,
-            IntentFilter(VarioService.ACTION_PRESSURE_UPDATE),
-            ContextCompat.RECEIVER_EXPORTED
+            IntentFilter(VarioService.ACTION_PRESSURE_UPDATE)
         )
+        Log.d(TAG, "Pressure receiver registered with LocalBroadcastManager")
 
         // Set up lifecycle-aware collection
         lifecycleScope.launch {
@@ -214,7 +212,9 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        unregisterReceiver(pressureReceiver)
+        // Use LocalBroadcastManager to unregister the receiver
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(pressureReceiver)
+        Log.d(TAG, "Pressure receiver unregistered from LocalBroadcastManager")
         super.onDestroy()
     }
 

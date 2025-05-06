@@ -31,3 +31,18 @@ object Constants {
     const val SENSOR_BATCH_SIZE = 5  // Number of samples to batch before processing
     const val SENSOR_WARMUP_TIME_MS = 500L  // Time to wait for sensor to stabilize
 }
+
+object SoundConstants {
+    const val CLIMB_THRESHOLD_MS = 0.1f // m/s
+    const val SINK_THRESHOLD_MS = -2.0f // m/s
+    const val SINK_ALARM_THRESHOLD_MS = -10.0f // m/s, Example value, 0 means off
+    const val BASE_FREQUENCY_HZ = 700
+    const val FREQUENCY_INCREMENT_HZ_PER_TENTH_MS = 10
+    const val SAMPLE_RATE = 44100 // Standard sample rate for audio
+    const val VOLUME_LEVELS = 6 // 0 (off) to 6
+    const val DEFAULT_VOLUME = 4 // Example default volume level
+
+    // New constants for beeping behavior
+    const val BEEP_DURATION_MS = 150L // Duration of a single beep in milliseconds
+    const val SILENCE_DURATION_MS = 350L // Duration of silence between beeps in milliseconds
+}
