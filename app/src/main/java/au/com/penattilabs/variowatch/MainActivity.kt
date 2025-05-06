@@ -16,7 +16,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp // Import sp for font size
-import androidx.wear.compose.material.*
+import androidx.wear.compose.material.MaterialTheme
+import androidx.wear.compose.material.Button
+import androidx.wear.compose.material.ButtonDefaults
+import androidx.wear.compose.material.Text
+import androidx.wear.compose.foundation.lazy.ScalingLazyColumn // Updated import
+import androidx.wear.compose.foundation.lazy.items // Updated import for items
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -28,6 +33,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import au.com.penattilabs.variowatch.R
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.foundation.Canvas
 
 @Suppress("ktlint:standard:package-name")  // Suppress package name warning for R class import
 class MainActivity : ComponentActivity() {
@@ -131,76 +140,92 @@ class MainActivity : ComponentActivity() {
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
                             ) {
-                                if (!currentUiState.isVarioRunning) {
-                                    Button(
-                                        onClick = { startVarioService() },
-                                        modifier = Modifier
-                                            .padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
-                                            .fillMaxWidth(UI.BUTTON_WIDTH_FRACTION),
-                                        colors = ButtonDefaults.primaryButtonColors()
-                                    ) {
-                                        Text(text = stringResource(R.string.start_vario))
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { // Wrap content in a Box for layering
+                                    // Vertical Speed Indicator - Drawn first to be in the background
+                                    if (currentUiState.isVarioRunning) {
+                                        VerticalSpeedIndicator(
+                                            verticalSpeed = currentUiState.verticalSpeed,
+                                            useMetricUnits = currentUseMetricUnits
+                                        )
                                     }
 
-                                    Button(
-                                        onClick = { toggleSettings(true) },
-                                        modifier = Modifier
-                                            .padding(top = UI.VERTICAL_PADDING_SMALL.dp)
-                                            .fillMaxWidth(UI.BUTTON_WIDTH_FRACTION),
-                                        colors = ButtonDefaults.secondaryButtonColors()
-                                    ) {
-                                        Text(text = stringResource(R.string.settings))
-                                    }
-                                } else {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
-                                    ) {
-                                        // Display Vertical Speed prominently
-                                        Text(
-                                            text = AltitudeCalculator.formatVerticalSpeed(currentUiState.verticalSpeed, currentUseMetricUnits),
-                                            style = MaterialTheme.typography.display1, // Use a large style
-                                            fontSize = UI.VERTICAL_SPEED_FONT_SIZE, // Apply custom large font size
-                                            modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_MEDIUM.dp)
-                                        )
+                                    // Existing content
+                                    if (!currentUiState.isVarioRunning) {
+                                        Column( // Wrap Start and Settings buttons in a Column
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(UI.VERTICAL_PADDING_SMALL.dp) // Use spacedBy for vertical spacing
+                                        ) {
+                                            Button(
+                                                onClick = { startVarioService() },
+                                                modifier = Modifier
+                                                    // .padding(bottom = UI.VERTICAL_PADDING_SMALL.dp) // Removed individual padding
+                                                    .fillMaxWidth(UI.BUTTON_WIDTH_FRACTION),
+                                                colors = ButtonDefaults.primaryButtonColors()
+                                            ) {
+                                                Text(text = stringResource(R.string.start_vario))
+                                            }
+
+                                            Button(
+                                                onClick = { toggleSettings(true) },
+                                                modifier = Modifier
+                                                    // .padding(top = UI.VERTICAL_PADDING_SMALL.dp) // Removed individual padding
+                                                    .fillMaxWidth(UI.BUTTON_WIDTH_FRACTION),
+                                                colors = ButtonDefaults.secondaryButtonColors()
+                                            ) {
+                                                Text(text = stringResource(R.string.settings))
+                                            }
+                                        }
+                                    } else {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
+                                        ) {
+                                            // Display Vertical Speed prominently
+                                            Text(
+                                                text = AltitudeCalculator.formatVerticalSpeed(currentUiState.verticalSpeed, currentUseMetricUnits),
+                                                style = MaterialTheme.typography.display1, // Use a large style
+                                                fontSize = UI.VERTICAL_SPEED_FONT_SIZE, // Apply custom large font size
+                                                modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_MEDIUM.dp)
+                                            )
+                                            
+                                            // Display Altitude
+                                            Text(
+                                                text = AltitudeCalculator.formatAltitude(currentUiState.currentAltitude, currentUseMetricUnits),
+                                                modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
+                                            )
+
+                                            // Display Pressure
+                                            Text(
+                                                text = stringResource(R.string.pressure_format).format(currentUiState.currentPressure),
+                                                modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
+                                            )
+                                            // Optional: Display QNH for debugging
+                                            // Text(
+                                            //     text = "QNH: %.2f".format(currentQnh),
+                                            //     modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
+                                            // )
+                                        }
+
+                                        Button(
+                                            onClick = { stopVarioService() },
+                                            modifier = Modifier
+                                                .padding(top = UI.VERTICAL_PADDING_SMALL.dp)
+                                                .fillMaxWidth(UI.BUTTON_WIDTH_FRACTION),
+                                            colors = ButtonDefaults.primaryButtonColors()
+                                        ) {
+                                            Text(text = stringResource(R.string.stop_vario))
+                                        }
                                         
-                                        // Display Altitude
-                                        Text(
-                                            text = AltitudeCalculator.formatAltitude(currentUiState.currentAltitude, currentUseMetricUnits),
-                                            modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
-                                        )
-
-                                        // Display Pressure
-                                        Text(
-                                            text = stringResource(R.string.pressure_format).format(currentUiState.currentPressure),
-                                            modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
-                                        )
-                                        // Optional: Display QNH for debugging
-                                        // Text(
-                                        //     text = "QNH: %.2f".format(currentQnh),
-                                        //     modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
-                                        // )
-                                    }
-
-                                    Button(
-                                        onClick = { stopVarioService() },
-                                        modifier = Modifier
-                                            .padding(top = UI.VERTICAL_PADDING_SMALL.dp)
-                                            .fillMaxWidth(UI.BUTTON_WIDTH_FRACTION),
-                                        colors = ButtonDefaults.primaryButtonColors()
-                                    ) {
-                                        Text(text = stringResource(R.string.stop_vario))
-                                    }
-                                    
-                                    // Add Settings button below Stop button
-                                    Button(
-                                        onClick = { toggleSettings(true) },
-                                        modifier = Modifier
-                                            .padding(top = UI.VERTICAL_PADDING_SMALL.dp)
-                                            .fillMaxWidth(UI.BUTTON_WIDTH_FRACTION),
-                                        colors = ButtonDefaults.secondaryButtonColors()
-                                    ) {
-                                        Text(text = stringResource(R.string.settings))
+                                        // Add Settings button below Stop button
+                                        Button(
+                                            onClick = { toggleSettings(true) },
+                                            modifier = Modifier
+                                                .padding(top = UI.VERTICAL_PADDING_SMALL.dp)
+                                                .fillMaxWidth(UI.BUTTON_WIDTH_FRACTION),
+                                            colors = ButtonDefaults.secondaryButtonColors()
+                                        ) {
+                                            Text(text = stringResource(R.string.settings))
+                                        }
                                     }
                                 }
                             }
@@ -268,6 +293,47 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
+fun VerticalSpeedIndicator(
+    verticalSpeed: Float,
+    useMetricUnits: Boolean,
+    modifier: Modifier = Modifier,
+    maxSpeedMetric: Float = 5.0f, // m/s
+    maxSpeedImperial: Float = 984.252f, // ft/min (approx 5 m/s)
+    strokeWidth: Float = 15.0f
+) {
+    Canvas(modifier = modifier.fillMaxSize()) {
+        val maxSpeed = if (useMetricUnits) maxSpeedMetric else maxSpeedImperial
+        val sweepAngleRange = 90f // 90 degrees for positive (3 o'clock to 12 o'clock), 90 for negative (3 o'clock to 6 o'clock)
+
+        val currentSpeedClamped = verticalSpeed.coerceIn(-maxSpeed, maxSpeed)
+        val normalizedSpeed = currentSpeedClamped / maxSpeed // -1 to 1
+
+        val sweepAngle = normalizedSpeed * sweepAngleRange
+
+        // 0 degrees is 3 o'clock. Positive angles are counter-clockwise.
+        // We want positive speeds to go up (towards 12 o'clock, which is 270 or -90 degrees)
+        // and negative speeds to go down (towards 6 o'clock, which is 90 degrees)
+        val startAngle = 0f // Start at 3 o'clock
+
+        val indicatorColor = when {
+            normalizedSpeed > 0 -> Color.Green
+            normalizedSpeed < 0 -> Color.Red
+            else -> Color.Transparent // No indicator if speed is zero
+        }
+
+        if (normalizedSpeed != 0f) {
+            drawArc(
+                color = indicatorColor,
+                startAngle = if (normalizedSpeed > 0) startAngle - sweepAngle else startAngle, // Adjust start for positive to draw upwards
+                sweepAngle = if (normalizedSpeed > 0) sweepAngle else -sweepAngle, // Negative sweep for sinking
+                useCenter = false,
+                style = Stroke(width = strokeWidth)
+            )
+        }
+    }
+}
+
+@Composable
 private fun SettingsContent(
     useMetricUnits: Boolean,
     onToggleUnits: () -> Unit,
@@ -276,77 +342,72 @@ private fun SettingsContent(
     onAdjustAltitude: (increase: Boolean) -> Unit // Parameter remains the same, implementation changed in MainActivity
 ) {
     BackHandler(onBack = onBackClick)
-    
+
     ScalingLazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = MainActivity.UI.HORIZONTAL_PADDING.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        content = {
-            item {
-                Text(
-                    text = stringResource(R.string.settings),
-                    modifier = Modifier.padding(vertical = MainActivity.UI.VERTICAL_PADDING_MEDIUM.dp)
-                )
-            }
+    ) {
+        item {
+            Text(
+                text = stringResource(R.string.settings),
+                modifier = Modifier.padding(vertical = MainActivity.UI.VERTICAL_PADDING_MEDIUM.dp)
+            )
+        }
 
-            item {
-                Button(
-                    onClick = onToggleUnits,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = MainActivity.UI.VERTICAL_PADDING_SMALL.dp)
-                ) {
-                    Text(text = stringResource(
-                        if (useMetricUnits) R.string.altitude_unit_metric 
-                        else R.string.altitude_unit_imperial
-                    ))
-                }
-            }
-
-            item {
-                Text(
-                    text = stringResource(R.string.calibrate_altitude),
-                    modifier = Modifier.padding(top = MainActivity.UI.VERTICAL_PADDING_LARGE.dp, bottom = MainActivity.UI.VERTICAL_PADDING_SMALL.dp)
-                )
-            }
-            
-            item {
-                Text(
-                    text = AltitudeCalculator.formatAltitude(currentAltitude, useMetricUnits), // Use passed value
-                    modifier = Modifier.padding(vertical = MainActivity.UI.VERTICAL_PADDING_SMALL.dp)
-                )
-            }
-            
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    content = {
-                        Button(
-                            onClick = { onAdjustAltitude(false) },
-                            modifier = Modifier.padding(4.dp),
-                            content = { Text("−") }
-                        )
-                        
-                        Button(
-                            onClick = { onAdjustAltitude(true) },
-                            modifier = Modifier.padding(4.dp),
-                            content = { Text("+") }
-                        )
-                    }
-                )
-            }
-
-            item {
-                Button(
-                    onClick = onBackClick,
-                    modifier = Modifier
-                        .padding(top = MainActivity.UI.VERTICAL_PADDING_LARGE.dp, bottom = MainActivity.UI.VERTICAL_PADDING_SMALL.dp)
-                        .fillMaxWidth(),
-                    content = { Text(text = stringResource(R.string.back)) }
-                )
+        item {
+            Button(
+                onClick = onToggleUnits,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = MainActivity.UI.VERTICAL_PADDING_SMALL.dp)
+            ) {
+                Text(text = stringResource(
+                    if (useMetricUnits) R.string.altitude_unit_metric
+                    else R.string.altitude_unit_imperial
+                ))
             }
         }
-    )
+
+        item {
+            Text(
+                text = stringResource(R.string.calibrate_altitude),
+                modifier = Modifier.padding(top = MainActivity.UI.VERTICAL_PADDING_LARGE.dp, bottom = MainActivity.UI.VERTICAL_PADDING_SMALL.dp)
+            )
+        }
+
+        item {
+            Text(
+                text = AltitudeCalculator.formatAltitude(currentAltitude, useMetricUnits), // Use passed value
+                modifier = Modifier.padding(vertical = MainActivity.UI.VERTICAL_PADDING_SMALL.dp)
+            )
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                Button(
+                    onClick = { onAdjustAltitude(false) },
+                    modifier = Modifier.padding(4.dp),
+                ) { Text("−") }
+
+                Button(
+                    onClick = { onAdjustAltitude(true) },
+                    modifier = Modifier.padding(4.dp),
+                ) { Text("+") }
+            }
+        }
+
+        item {
+            Button(
+                onClick = onBackClick,
+                modifier = Modifier
+                    .padding(top = MainActivity.UI.VERTICAL_PADDING_LARGE.dp, bottom = MainActivity.UI.VERTICAL_PADDING_SMALL.dp)
+                    .fillMaxWidth(),
+            ) { Text(text = stringResource(R.string.back)) }
+        }
+    }
 }

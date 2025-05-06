@@ -56,9 +56,32 @@ Built with:
 - Android Jetpack libraries
 - Wear Compose for UI
 
+Use Android Studio to run/debug on emulator
+
+### Device Deploy
+
+To deploy on Android watch, you need to 
+
+1) Enable Developer Options on your watch
+ - Go to Settings > About watch > Software information.
+ - Tap Software version (or Build number on some Wear OS versions) seven times. You'll see a message saying "Developer mode turned on".
+ - Go back to the main Settings menu, and you should now see Developer options. Tap it.
+ - Enable ADB debugging. Confirm any prompts.
+ - Enable Debug over Wi-Fi (Wireless debugging). Your watch needs to be connected to the same Wi-Fi network as your development computer. 
+
+2) Pair your computer via ADB / wi-fi (only required once)
+ - In Wireless debugging on your watch, click 'Pair new device'. Note the IP address and port displayed (e.g., 192.168.1.X:5555), and pairing code.
+- On your computer terminal, navigate to your Android SDK's platform-tools directory (e.g., C:\Users\YourUser\AppData\Local\Android\Sdk\platform-tools) or ensure this directory is in your system's PATH.
+ - Run `adb pair YOUR_WATCH_IP:PORT`. You will be requested to type the code.
+
+3) Connect your computer via ADB
+ - On your watch, under the Wireless debugging screen, note the IP address and Port listed below the device name. Should be a different port from the one used to pair.
+ - Run on computer terminal: `adb connect YOUR_WATCH_IP:PORT` (the noted IP from last step).
+ - Run `adb devices` to confirm your device is connected and ready to receive an app deployment. You should see the device in Android Studio as a selectable target to deploy and debug.
+
 ## License
 
-[Your chosen license]
+MIT
 
 ## Contributing
 
