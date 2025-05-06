@@ -15,7 +15,7 @@ class UserPreferences(context: Context) : android.os.Parcelable {
         val CREATOR = object : android.os.Parcelable.Creator<UserPreferences> {
             override fun createFromParcel(parcel: android.os.Parcel): UserPreferences {
                 return UserPreferences(applicationContext).also {
-                    it.currentAltitude = parcel.readFloat()
+                    // Remove currentAltitude reading
                     it.useMetricUnits = parcel.readInt() == 1
                     it.qnh = parcel.readFloat()
                 }
@@ -49,11 +49,11 @@ class UserPreferences(context: Context) : android.os.Parcelable {
             sharedPreferences.edit().putFloat(KEY_QNH, value).apply()
         }
 
-    var currentAltitude: Float = 0f
-        private set
+    // Revert currentAltitude to a simple, non-persisted property or remove if unused internally
+    // var currentAltitude: Float = 0f // Example if needed internally, otherwise remove
 
     override fun writeToParcel(parcel: android.os.Parcel, flags: Int) {
-        parcel.writeFloat(currentAltitude)
+        // Remove currentAltitude from parcel writing
         parcel.writeInt(if (useMetricUnits) 1 else 0)
         parcel.writeFloat(qnh)
     }
@@ -68,16 +68,6 @@ class UserPreferences(context: Context) : android.os.Parcelable {
         qnh = newQnh
     }
 
-    fun updateCurrentAltitude(pressure: Float) {
-        currentAltitude = AltitudeCalculator.calculateAltitude(pressure, qnh)
-    }
-
-    fun adjustAltitude(increase: Boolean) {
-        val step = if (useMetricUnits) 
-            Constants.METRIC_ALTITUDE_STEP
-        else 
-            Constants.IMPERIAL_ALTITUDE_STEP / Constants.METERS_TO_FEET // Convert feet to meters
-        
-        currentAltitude += if (increase) step else -step
-    }
+    // Remove updateCurrentAltitude and adjustAltitude functions
+    // The logic for calibration (adjusting QNH) will be handled elsewhere (e.g., ViewModel)
 }

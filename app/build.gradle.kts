@@ -3,6 +3,15 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Version constants - Moved to top
+val kotlinVersion = "1.9.21"
+val composeBomVersion = "2024.02.00"
+val coroutinesVersion = "1.7.3"
+val junitPlatformVersion = "1.10.1"
+val androidxTestVersion = "1.5.0"
+val mockkVersion = "1.13.8"
+val lifecycleVersion = "2.7.0"
+
 android {
     namespace = "au.com.penattilabs.variowatch"
     compileSdk = 34
@@ -74,15 +83,6 @@ android {
         }
     }
 }
-
-// Version constants
-val kotlinVersion = "1.9.21"
-val composeBomVersion = "2024.02.00"
-val coroutinesVersion = "1.7.3"
-val junitPlatformVersion = "1.10.1"
-val androidxTestVersion = "1.5.0"
-val mockkVersion = "1.13.8"
-val lifecycleVersion = "2.7.0"
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:$composeBomVersion")

@@ -1,5 +1,18 @@
 # VarioWatch Kotlin Style Guide and Best Practices
 
+## App goals / functionality
+
+- Goal is to have an app that works as a variometer tool for aiding paragliding and hang gliding flights by indicating vertical speed on screen and by sound
+- Specifically targeting Android Wear OS app (Galaxy Watch 6)
+- App has 2 modes, running and stopped. While running, a background service will report barometric pressure changes, that will be used to calculate altitude and vertical speed
+- Altitude, vertical speed and pressure should be reported in the main screen
+- Vertical speed is also used to generate intermittent synthetic sound which changes in frequency and duration based on vertical acceleration
+- A Noise reduction filter should be applied to the background service to reduce noise and drastic oscillations (caused by noise or shock waves, other than actual variation in altitude) on the sensor readings
+- Altitude given pressure is calculated using hypsometric equation and using QNH stored in user preferences (which defaults to standard atmospheric pressure if no altitude calibration)
+- When calibrating the Altitude, the user will input the known altitude of the take off and given pressure read from take off, app should calculate and save QNH in user preferences. That adjusted value will then be used to calculate subsequent altitudes based on pressure reading
+- The app will have a SoundSynthetizer service that will receive vertical speed variations and generate sound on frequencies and durations that can change as the vertical speed changes, based on some user defined constants
+- Every code refactor / implementation iteration is done by AI, it should check for compilation errors and for not breaking current functionality
+
 ## Code Style and Formatting
 
 ### General Guidelines

@@ -100,8 +100,6 @@ class VarioService : Service() {
 
     private fun handlePressureReading(pressureHpa: Float) {
         if (pressureHpa == 0f) return
-        
-        userPreferences.updateCurrentAltitude(pressureHpa)
 
         val intent = Intent(ACTION_PRESSURE_UPDATE).apply {
             putExtra(EXTRA_PRESSURE, pressureHpa)

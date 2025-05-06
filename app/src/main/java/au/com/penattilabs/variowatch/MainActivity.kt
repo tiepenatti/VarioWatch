@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
+import android.util.Log // Add Log import
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -48,6 +49,12 @@ class MainActivity : ComponentActivity() {
     private val uiState: StateFlow<MainActivityUiState> = _uiState.asStateFlow()
     private lateinit var userPreferences: UserPreferences
 
+    // Add StateFlows for QNH and Units
+    private lateinit var _qnhState: MutableStateFlow<Float>
+    private lateinit var qnhState: StateFlow<Float>
+    private lateinit var _useMetricUnitsState: MutableStateFlow<Boolean>
+    private lateinit var useMetricUnitsState: StateFlow<Boolean>
+
     private data class MainActivityUiState(
         val isVarioRunning: Boolean = false,
         val currentPressure: Float = UI.DEFAULT_PRESSURE,
@@ -60,7 +67,6 @@ class MainActivity : ComponentActivity() {
                 val pressure = intent.getFloatExtra(VarioService.EXTRA_PRESSURE, UI.DEFAULT_PRESSURE)
                 android.util.Log.d(TAG, "Received broadcast pressure: $pressure hPa")
                 _uiState.update { it.copy(currentPressure = pressure) }
-                userPreferences.updateCurrentAltitude(pressure)
             }
         }
     }
@@ -68,7 +74,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         userPreferences = (application as VarioWatchApplication).userPreferences
-        
+
+        // Initialize StateFlows
+        _qnhState = MutableStateFlow(userPreferences.qnh)
+        qnhState = _qnhState.asStateFlow()
+        _useMetricUnitsState = MutableStateFlow(userPreferences.useMetricUnits)
+        useMetricUnitsState = _useMetricUnitsState.asStateFlow()
+
         ContextCompat.registerReceiver(
             this,
             pressureReceiver,
@@ -82,16 +94,29 @@ class MainActivity : ComponentActivity() {
                 setContent {
                     MaterialTheme {
                         val currentUiState by uiState.collectAsState()
-                        val currentAltitude by remember { derivedStateOf { userPreferences.currentAltitude } }
-                        val useMetricUnits by remember { derivedStateOf { userPreferences.useMetricUnits } }
+                        // Collect states
+                        val currentQnh by qnhState.collectAsState()
+                        val currentUseMetricUnits by useMetricUnitsState.collectAsState()
+
+                        // Calculate altitude based on current pressure and QNH state
+                        val currentAltitude by remember(currentUiState.currentPressure, currentQnh) {
+                            derivedStateOf {
+                                AltitudeCalculator.calculateAltitude(currentUiState.currentPressure, currentQnh)
+                            }
+                        }
 
                         if (currentUiState.showSettings) {
                             SettingsContent(
-                                useMetricUnits = useMetricUnits,
-                                onToggleUnits = { userPreferences.toggleUnitSystem() },
+                                useMetricUnits = currentUseMetricUnits, // Use collected state
+                                onToggleUnits = {
+                                    userPreferences.toggleUnitSystem() // Update persistent storage
+                                    _useMetricUnitsState.value = userPreferences.useMetricUnits // Update state flow
+                                },
                                 onBackClick = { toggleSettings(false) },
-                                currentAltitude = currentAltitude,
-                                onAdjustAltitude = { increase -> userPreferences.adjustAltitude(increase) }
+                                currentAltitude = currentAltitude, // Pass calculated altitude
+                                onAdjustAltitude = { increase ->
+                                    adjustQnhBasedOnAltitudeAdjustment(increase)
+                                }
                             )
                         } else {
                             Column(
@@ -125,7 +150,8 @@ class MainActivity : ComponentActivity() {
                                         modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
                                     ) {
                                         Text(
-                                            text = AltitudeCalculator.formatAltitude(currentAltitude, useMetricUnits),
+                                            // Use calculated altitude and collected unit state
+                                            text = AltitudeCalculator.formatAltitude(currentAltitude, currentUseMetricUnits),
                                             modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
                                         )
 
@@ -133,6 +159,11 @@ class MainActivity : ComponentActivity() {
                                             text = stringResource(R.string.pressure_format).format(currentUiState.currentPressure),
                                             modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
                                         )
+                                        // Optional: Display QNH for debugging
+                                        // Text(
+                                        //     text = "QNH: %.2f".format(currentQnh),
+                                        //     modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
+                                        // )
                                     }
 
                                     Button(
@@ -143,6 +174,17 @@ class MainActivity : ComponentActivity() {
                                         colors = ButtonDefaults.primaryButtonColors()
                                     ) {
                                         Text(text = stringResource(R.string.stop_vario))
+                                    }
+                                    
+                                    // Add Settings button below Stop button
+                                    Button(
+                                        onClick = { toggleSettings(true) },
+                                        modifier = Modifier
+                                            .padding(top = UI.VERTICAL_PADDING_SMALL.dp)
+                                            .fillMaxWidth(UI.BUTTON_WIDTH_FRACTION),
+                                        colors = ButtonDefaults.secondaryButtonColors()
+                                    ) {
+                                        Text(text = stringResource(R.string.settings))
                                     }
                                 }
                             }
@@ -172,6 +214,39 @@ class MainActivity : ComponentActivity() {
     private fun toggleSettings(show: Boolean) {
         _uiState.update { it.copy(showSettings = show) }
     }
+    
+    // New function to handle QNH adjustment based on altitude steps
+    private fun adjustQnhBasedOnAltitudeAdjustment(increase: Boolean) {
+        val currentPressure = uiState.value.currentPressure
+        if (currentPressure <= 0f) {
+            Log.w(TAG, "Cannot adjust QNH without valid pressure reading.")
+            return // Cannot adjust without a valid pressure reading
+        }
+
+        // Calculate current altitude using the QNH from the state flow
+        val currentAltitude = AltitudeCalculator.calculateAltitude(currentPressure, qnhState.value)
+        if (currentAltitude.isNaN()) {
+             Log.w(TAG, "Cannot adjust QNH with invalid current altitude.")
+            return // Cannot adjust if current altitude is invalid
+        }
+
+        // Use the collected state for unit-dependent step calculation
+        val step = if (useMetricUnitsState.value) 
+            Constants.METRIC_ALTITUDE_STEP
+        else
+            Constants.IMPERIAL_ALTITUDE_STEP / Constants.METERS_TO_FEET // Convert feet step to meters
+
+        val targetAltitude = currentAltitude + (if (increase) step else -step)
+        val newQnh = AltitudeCalculator.calculateQnhFromAltitude(currentPressure, targetAltitude)
+
+        // Update UserPreferences (persistent storage)
+        userPreferences.updateQnh(newQnh)
+        // Update the QNH StateFlow (triggers recomposition)
+        _qnhState.value = newQnh
+
+        // Log the adjustment
+        Log.d(TAG, "Adjusted QNH based on altitude change. Current Pressure: $currentPressure, Target Altitude: $targetAltitude, New QNH: $newQnh")
+    }
 }
 
 @Composable
@@ -179,8 +254,8 @@ private fun SettingsContent(
     useMetricUnits: Boolean,
     onToggleUnits: () -> Unit,
     onBackClick: () -> Unit,
-    currentAltitude: Float,
-    onAdjustAltitude: (increase: Boolean) -> Unit
+    currentAltitude: Float, // Parameter remains the same
+    onAdjustAltitude: (increase: Boolean) -> Unit // Parameter remains the same, implementation changed in MainActivity
 ) {
     BackHandler(onBack = onBackClick)
     
@@ -220,7 +295,7 @@ private fun SettingsContent(
             
             item {
                 Text(
-                    text = AltitudeCalculator.formatAltitude(currentAltitude, useMetricUnits),
+                    text = AltitudeCalculator.formatAltitude(currentAltitude, useMetricUnits), // Use passed value
                     modifier = Modifier.padding(vertical = MainActivity.UI.VERTICAL_PADDING_SMALL.dp)
                 )
             }

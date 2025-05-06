@@ -31,6 +31,8 @@ object AltitudeCalculator {
      * @return Calculated altitude in meters
      */
     fun calculateAltitude(pressure: Float, qnh: Float): Float {
+        // Return NaN for invalid pressure to avoid calculation errors
+        if (pressure <= 0f) return Float.NaN 
         // Handle special case of equal pressures
         if (pressure == qnh) return 0f
 
@@ -84,12 +86,17 @@ object AltitudeCalculator {
      * @param useMetric Whether to use metric (true) or imperial (false) units
      * @return Formatted string with appropriate unit (m or ft)
      */
-    fun formatAltitude(altitude: Float, useMetric: Boolean): String = 
-        if (useMetric) {
+    fun formatAltitude(altitude: Float, useMetric: Boolean): String {
+        // Handle NaN case
+        if (altitude.isNaN()) {
+            return "---"
+        }
+        return if (useMetric) {
             String.format("%.0f m", altitude)
         } else {
             String.format("%.0f ft", altitude * Constants.METERS_TO_FEET)
         }
+    }
 
     /**
      * Calculates the initial altitude estimate using standard sea level temperature.
