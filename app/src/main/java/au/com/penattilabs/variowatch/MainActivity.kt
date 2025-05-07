@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
         const val DEFAULT_PRESSURE = 0f
         const val BUTTON_WIDTH_FRACTION = 0.8f
         const val HORIZONTAL_PADDING = 16
+        const val VERTICAL_PADDING_TINY = 3
         const val VERTICAL_PADDING_SMALL = 8
         const val VERTICAL_PADDING_MEDIUM = 16
         const val VERTICAL_PADDING_LARGE = 24
@@ -175,57 +176,67 @@ class MainActivity : ComponentActivity() {
                                                 Text(text = stringResource(R.string.settings))
                                             }
                                         }
-                                    } else {
+                                    } else { // Vario IS running
+                                        // Wrap the text block and buttons in a single Column for proper layout
                                         Column(
+                                            modifier = Modifier.fillMaxSize(),
                                             horizontalAlignment = Alignment.CenterHorizontally,
-                                            modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
+                                            verticalArrangement = Arrangement.Center
                                         ) {
-                                            // Display Vertical Speed prominently
-                                            Text(
-                                                text = AltitudeCalculator.formatVerticalSpeed(currentUiState.verticalSpeed, currentUseMetricUnits),
-                                                style = MaterialTheme.typography.display1, // Use a large style
-                                                fontSize = UI.VERTICAL_SPEED_FONT_SIZE, // Apply custom large font size
-                                                modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_MEDIUM.dp)
-                                            )
+                                            // Existing Column for text data
+                                            Column(
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
+                                            ) {
+                                                // Display Altitude
+                                                Text(
+                                                    text = AltitudeCalculator.formatAltitude(currentUiState.currentAltitude, currentUseMetricUnits),
+                                                    //modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_TINY.dp)
+                                                )
+
+                                                // Display Vertical Speed prominently
+                                                Text(
+                                                    text = AltitudeCalculator.formatVerticalSpeed(currentUiState.verticalSpeed, currentUseMetricUnits),
+                                                    style = MaterialTheme.typography.display1, // Use a large style
+                                                    fontSize = UI.VERTICAL_SPEED_FONT_SIZE, // Apply custom large font size
+                                                    //modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_TINY.dp)
+                                                )
                                             
-                                            // Display Altitude
-                                            Text(
-                                                text = AltitudeCalculator.formatAltitude(currentUiState.currentAltitude, currentUseMetricUnits),
-                                                modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
-                                            )
+                                                // Display Pressure (Commented out)
+                                                /*
+                                                Text(
+                                                    text = stringResource(R.string.pressure_format).format(currentUiState.currentPressure),
+                                                    modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
+                                                )
+                                                */
+                                                // Optional: Display QNH for debugging
+                                                // Text(
+                                                //     text = "QNH: %.2f".format(currentQnh),
+                                                //     modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
+                                                // )
+                                            }
 
-                                            // Display Pressure
-                                            Text(
-                                                text = stringResource(R.string.pressure_format).format(currentUiState.currentPressure),
-                                                modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
-                                            )
-                                            // Optional: Display QNH for debugging
-                                            // Text(
-                                            //     text = "QNH: %.2f".format(currentQnh),
-                                            //     modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
-                                            // )
-                                        }
-
-                                        Button(
-                                            onClick = { stopVarioService() },
-                                            modifier = Modifier
-                                                .padding(top = UI.VERTICAL_PADDING_SMALL.dp)
-                                                .fillMaxWidth(UI.BUTTON_WIDTH_FRACTION),
-                                            colors = ButtonDefaults.primaryButtonColors()
-                                        ) {
-                                            Text(text = stringResource(R.string.stop_vario))
-                                        }
+                                            Button(
+                                                onClick = { stopVarioService() },
+                                                modifier = Modifier
+                                                    .padding(top = UI.VERTICAL_PADDING_TINY.dp)
+                                                    .fillMaxWidth(UI.BUTTON_WIDTH_FRACTION),
+                                                colors = ButtonDefaults.primaryButtonColors()
+                                            ) {
+                                                Text(text = stringResource(R.string.stop_vario))
+                                            }
                                         
-                                        // Add Settings button below Stop button
-                                        Button(
-                                            onClick = { toggleSettings(true) },
-                                            modifier = Modifier
-                                                .padding(top = UI.VERTICAL_PADDING_SMALL.dp)
-                                                .fillMaxWidth(UI.BUTTON_WIDTH_FRACTION),
-                                            colors = ButtonDefaults.secondaryButtonColors()
-                                        ) {
-                                            Text(text = stringResource(R.string.settings))
-                                        }
+                                            // Add Settings button below Stop button
+                                            Button(
+                                                onClick = { toggleSettings(true) },
+                                                modifier = Modifier
+                                                    .padding(top = UI.VERTICAL_PADDING_SMALL.dp)
+                                                    .fillMaxWidth(UI.BUTTON_WIDTH_FRACTION),
+                                                colors = ButtonDefaults.secondaryButtonColors()
+                                            ) {
+                                                Text(text = stringResource(R.string.settings))
+                                            }
+                                        } // End of the new wrapping Column
                                     }
                                 }
                             }
