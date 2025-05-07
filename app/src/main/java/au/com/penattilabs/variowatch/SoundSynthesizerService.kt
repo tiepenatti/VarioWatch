@@ -23,7 +23,14 @@ class SoundSynthesizerService : Service() {
     private var isPlaying = false
     private var currentFrequency = 0.0
     private var currentVolume = SoundConstants.DEFAULT_VOLUME / SoundConstants.VOLUME_LEVELS.toFloat() // Normalized volume
-    private var shouldBeepForClimb = false // New state to control beeping for climb
+    // private var shouldBeepForClimb = false // No longer needed, behavior driven by profile
+
+    // New properties for sound profile
+    private var varioSoundConfig: VarioSoundConfig? = null
+    private var currentCycleMillis: Int = 1000 // Default cycle duration
+    private var currentDutyPercent: Int = 0    // Default duty cycle (0% = silence)
+    private var previousVerticalSpeed: Float = 0.0f // For hysteresis logic with thresholds
+
 
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob)
@@ -41,9 +48,10 @@ class SoundSynthesizerService : Service() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == VarioService.ACTION_PRESSURE_UPDATE) {
                 val verticalSpeed = intent.getFloatExtra(VarioService.EXTRA_VERTICAL_SPEED, Float.NaN)
-                Log.d(TAG, "Received vertical speed broadcast: $verticalSpeed") // Log received speed
+                Log.d(TAG, "Received vertical speed broadcast: $verticalSpeed (previous: $previousVerticalSpeed)")
                 if (!verticalSpeed.isNaN()) {
                     updateSound(verticalSpeed)
+                    this@SoundSynthesizerService.previousVerticalSpeed = verticalSpeed // Update after processing
                 } else {
                     Log.w(TAG, "Received NaN vertical speed")
                 }
@@ -54,6 +62,16 @@ class SoundSynthesizerService : Service() {
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Service creating")
+
+        // Load the sound profile
+        varioSoundConfig = SoundProfileParser.loadFromAssets(this, "sound_profile.txt")
+        if (varioSoundConfig == null) {
+            Log.e(TAG, "Failed to load sound_profile.txt. Sound will be disabled or use fallback if implemented.")
+            // Consider implementing a fallback to default hardcoded sounds or disabling sound
+        } else {
+            Log.i(TAG, "Sound profile loaded successfully.")
+        }
+
         setupAudioTrack()
         // Use LocalBroadcastManager to register the receiver
         LocalBroadcastManager.getInstance(this).registerReceiver(
@@ -115,58 +133,63 @@ class SoundSynthesizerService : Service() {
     }
 
     private fun updateSound(verticalSpeed: Float) {
-        val newFrequency: Double
-        var shouldPlayContinuous = false // For sink/alarm sounds
-        this.shouldBeepForClimb = false // Reset beeping state each time
-
         Log.d(TAG, "updateSound called with verticalSpeed: $verticalSpeed")
 
-        when {
-            // Climbing
-            verticalSpeed > SoundConstants.CLIMB_THRESHOLD_MS -> {
-                val steps = ((verticalSpeed - SoundConstants.CLIMB_THRESHOLD_MS) / 0.1f).toInt()
-                newFrequency = (SoundConstants.BASE_FREQUENCY_HZ + steps * SoundConstants.FREQUENCY_INCREMENT_HZ_PER_TENTH_MS).toDouble()
-                this.shouldBeepForClimb = true // Enable beeping for climb
-                Log.d(TAG, "Climbing detected. Steps: $steps, New Frequency: $newFrequency. Beeping enabled.")
-            }
-            // Sinking (above alarm threshold)
-            verticalSpeed <= SoundConstants.SINK_THRESHOLD_MS && (SoundConstants.SINK_ALARM_THRESHOLD_MS == 0f || verticalSpeed > SoundConstants.SINK_ALARM_THRESHOLD_MS) -> {
-                 val sinkRange = SoundConstants.SINK_THRESHOLD_MS - SoundConstants.SINK_ALARM_THRESHOLD_MS.coerceAtMost(SoundConstants.SINK_THRESHOLD_MS - 1)
-                 val freqRange = SoundConstants.BASE_FREQUENCY_HZ / 2.0
-                 val progress = (verticalSpeed - SoundConstants.SINK_THRESHOLD_MS) / sinkRange
-                 newFrequency = SoundConstants.BASE_FREQUENCY_HZ + progress * freqRange
-                 shouldPlayContinuous = true // Sink sound is continuous
-                 Log.d(TAG, "Sinking detected. Progress: $progress, New Frequency: $newFrequency. Continuous sound.")
-            }
-             // Sink Alarm
-            SoundConstants.SINK_ALARM_THRESHOLD_MS != 0f && verticalSpeed <= SoundConstants.SINK_ALARM_THRESHOLD_MS -> {
-                // TODO: Implement distinct alarm sound (siren)
-                newFrequency = SoundConstants.BASE_FREQUENCY_HZ / 4.0 // For now, a very low fixed frequency
-                shouldPlayContinuous = true // Sink alarm is continuous (for now)
-                Log.d(TAG, "Sink Alarm detected. New Frequency: $newFrequency. Continuous sound (alarm).")
-            }
-            // Neutral band
-            else -> {
-                newFrequency = 0.0
-                Log.d(TAG, "Neutral band detected. No sound.")
-            }
+        val config = varioSoundConfig ?: run {
+            Log.w(TAG, "VarioSoundConfig not loaded, cannot update sound.")
+            if (isPlaying) stopSound()
+            return
         }
 
-        val previousFrequency = currentFrequency
-        currentFrequency = newFrequency.coerceIn(50.0, SoundConstants.SAMPLE_RATE / 2.0) // Ensure frequency is valid
-        if (previousFrequency != currentFrequency) {
-             Log.d(TAG, "Frequency updated. Clamped Frequency: $currentFrequency (from $newFrequency)")
-        }
+        val soundParams = config.getSoundParameters(verticalSpeed)
+        var playThisIteration = false
 
-        // Logic to start/stop sound based on whether it's beeping or continuous
-        if (this.shouldBeepForClimb || shouldPlayContinuous) {
-            if (!isPlaying) {
-                Log.d(TAG, "Condition met to start sound (beeping or continuous).")
-                startSound()
+        if (soundParams != null && soundParams.first > 0 && soundParams.third > 0) { // Check hertz > 0 and dutyPercent > 0
+            val (hertz, cycleMillis, dutyPercent) = soundParams
+            currentFrequency = hertz.toDouble().coerceIn(0.0, SoundConstants.SAMPLE_RATE / 2.0)
+            currentCycleMillis = cycleMillis
+            currentDutyPercent = dutyPercent.coerceIn(0, 100)
+
+            Log.d(TAG, "Profile params: VSpeed: $verticalSpeed -> Hz: $currentFrequency, Cycle: $currentCycleMillis ms, Duty: $currentDutyPercent%")
+
+            if (isPlaying) {
+                // If already playing, check if we should stop based on OffThresholds
+                if (verticalSpeed <= config.climbToneOffThreshold && verticalSpeed >= config.sinkToneOffThreshold) {
+                    // Entered the "quiet zone" between climb-off and sink-off
+                    playThisIteration = false
+                    Log.d(TAG, "In quiet zone (vs: $verticalSpeed) while playing. ClimbOff: ${config.climbToneOffThreshold}, SinkOff: ${config.sinkToneOffThreshold}. Will stop.")
+                } else {
+                    playThisIteration = true // Continue playing
+                    Log.d(TAG, "Continue playing (vs: $verticalSpeed). Not in quiet zone.")
+                }
+            } else {
+                // If not playing, check if we should start based on OnThresholds
+                if (verticalSpeed > config.climbToneOnThreshold || verticalSpeed < config.sinkToneOnThreshold) {
+                    playThisIteration = true
+                    Log.d(TAG, "Start playing (vs: $verticalSpeed). ClimbOn: ${config.climbToneOnThreshold}, SinkOn: ${config.sinkToneOnThreshold}.")
+                } else {
+                    // In dead zone for starting, remain silent
+                    playThisIteration = false
+                    Log.d(TAG, "In dead zone for starting (vs: $verticalSpeed). ClimbOn: ${config.climbToneOnThreshold}, SinkOn: ${config.sinkToneOnThreshold}.")
+                }
             }
         } else {
+            // Profile indicates silence (0 Hz or 0% duty or null params)
+            Log.d(TAG, "Profile indicates silence for VSpeed: $verticalSpeed. Params: $soundParams")
+            currentFrequency = 0.0
+            currentCycleMillis = 1000 // Reset to a default silent cycle
+            currentDutyPercent = 0    // Reset to 0% duty
+            playThisIteration = false
+        }
+
+        if (playThisIteration) {
+            if (!isPlaying) {
+                startSound()
+            }
+            // If already playing and playThisIteration is true, parameters (freq, cycle, duty)
+            // will be picked up by the running generateToneLoop
+        } else {
             if (isPlaying) {
-                Log.d(TAG, "Condition met to stop sound.")
                 stopSound()
             }
         }
@@ -231,82 +254,67 @@ class SoundSynthesizerService : Service() {
         }
         val buffer = ShortArray(bufferSize)
         var angle = 0.0
-        var lastBeepEventTime = 0L // Tracks time for both beep and silence phases
-        var isCurrentlyInBeepPhase = false // True if currently outputting sound for a beep
+        var samplesIntoCurrentCycle = 0 // Tracks sample position within the custom cycle
 
-        Log.i(TAG, "Starting tone generation loop. Buffer size: $bufferSize")
+        Log.i(TAG, "Starting new tone generation loop. Buffer size: $bufferSize")
 
-        while (coroutineContext.isActive) {
-            val currentFreq = this.currentFrequency // Capture for this iteration
-            val currentVol = this.currentVolume   // Capture for this iteration
+        while (coroutineContext.isActive) { // Use coroutineContext.isActive for cooperative cancellation
+            // Capture current parameters safely for this iteration of the loop
+            val localFreq = this.currentFrequency
+            val localVol = this.currentVolume
+            val localCycleMillis = this.currentCycleMillis
+            val localDutyPercent = this.currentDutyPercent
 
             if (audioTrack == null || audioTrack?.playState != AudioTrack.PLAYSTATE_PLAYING) {
                 Log.w(TAG, "generateToneLoop: AudioTrack is null or not playing, exiting loop.")
-                break
+                break // Exit if AudioTrack is not ready
             }
 
-            val generateSoundThisCycle: Boolean
+            // If frequency, duty cycle, or cycle duration is zero/invalid, fill buffer with silence.
+            // This is a safeguard; updateSound() should manage stopping the sound (and this loop).
+            if (localFreq <= 0.0 || localDutyPercent <= 0 || localCycleMillis <= 0) {
+                buffer.fill(0) // Fill with silence
+            } else {
+                val samplesPerMs = SoundConstants.SAMPLE_RATE / 1000.0
+                // Ensure totalSamplesInCycle is at least 1 to avoid division by zero if localCycleMillis is very small but non-zero
+                val totalSamplesInCycle = max(1, (localCycleMillis * samplesPerMs).toInt())
+                val onSamplesInCycle = (totalSamplesInCycle * (localDutyPercent / 100.0)).toInt()
 
-            if (this.shouldBeepForClimb && currentFreq > 0) {
-                val currentTime = System.currentTimeMillis()
-                if (isCurrentlyInBeepPhase) { // Currently in a beep phase
-                    if (currentTime - lastBeepEventTime < SoundConstants.BEEP_DURATION_MS) {
-                        generateSoundThisCycle = true
-                    } else { // Beep duration ended, switch to silence
-                        isCurrentlyInBeepPhase = false
-                        lastBeepEventTime = currentTime // Reset timer for silence duration
-                        generateSoundThisCycle = false
-                        Log.v(TAG, "Beep ended, starting silence.")
-                    }
-                } else { // Currently in a silence phase (between beeps)
-                    if (currentTime - lastBeepEventTime >= SoundConstants.SILENCE_DURATION_MS) {
-                        isCurrentlyInBeepPhase = true
-                        lastBeepEventTime = currentTime // Reset timer for beep duration
-                        generateSoundThisCycle = true
-                        Log.v(TAG, "Silence ended, starting beep.")
-                    } else {
-                        generateSoundThisCycle = false
-                    }
-                }
-            } else if (currentFreq > 0) { // Not beeping for climb, but frequency is positive (e.g., continuous sink tone)
-                generateSoundThisCycle = true
-            } else { // Frequency is zero or not beeping for climb
-                generateSoundThisCycle = false
-                if (isCurrentlyInBeepPhase) { // If we were beeping and freq/climb state changed, reset
-                    isCurrentlyInBeepPhase = false
-                    lastBeepEventTime = System.currentTimeMillis()
-                    Log.v(TAG, "Climb/frequency condition ended during beep, stopping beep.")
-                }
-            }
+                val angularIncrement = 2.0 * PI * localFreq / SoundConstants.SAMPLE_RATE
+                val amplitude = (Short.MAX_VALUE * localVol).toInt()
 
-            if (generateSoundThisCycle) {
-                val angularIncrement = 2.0 * PI * currentFreq / SoundConstants.SAMPLE_RATE
-                val amplitude = (Short.MAX_VALUE * currentVol).toInt()
                 for (i in buffer.indices) {
-                    buffer[i] = (sin(angle) * amplitude).toInt().toShort()
+                    if (samplesIntoCurrentCycle < onSamplesInCycle) {
+                        // Sound ON part of the duty cycle
+                        buffer[i] = (sin(angle) * amplitude).toInt().toShort()
+                    } else {
+                        // Sound OFF part of the duty cycle
+                        buffer[i] = 0 // Silence
+                    }
                     angle += angularIncrement
-                    if (angle > 2.0 * PI) {
+                    if (angle >= 2.0 * PI) { // Use >= for floating point comparisons
                         angle -= 2.0 * PI
                     }
+                    samplesIntoCurrentCycle = (samplesIntoCurrentCycle + 1) % totalSamplesInCycle
                 }
-            } else {
-                buffer.fill(0) // Fill with silence
             }
 
             try {
                 val written = audioTrack?.write(buffer, 0, buffer.size) ?: -1
                 if (written < 0) {
                     Log.e(TAG, "generateToneLoop: AudioTrack write error: $written. Exiting loop.")
-                    // Consider calling stopSound() here if appropriate, but be mindful of re-entry
+                    // This often indicates a problem with the AudioTrack state.
+                    // Consider attempting to stop sound gracefully or signal an error.
                     break
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Exception during AudioTrack write", e)
-                // Consider calling stopSound()
-                break
+                break // Exit loop on write exception
             }
         }
-        Log.i(TAG, "Exiting tone generation loop")
+        Log.i(TAG, "Exiting tone generation loop. isPlaying was: $isPlaying")
+        // Note: isPlaying is primarily managed by startSound/stopSound.
+        // If the loop exits unexpectedly, stopSound() should ideally be called by the error handling logic.
     }
 
     // TODO: Add methods to control volume if needed via binding
