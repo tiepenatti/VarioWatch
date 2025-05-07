@@ -95,6 +95,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutinesVersion")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:$lifecycleVersion")
     implementation("androidx.lifecycle:lifecycle-service:$lifecycleVersion")
+    implementation("androidx.fragment:fragment-ktx:1.7.0")
     
     // Wear OS dependencies
     implementation("androidx.wear:wear:1.3.0")

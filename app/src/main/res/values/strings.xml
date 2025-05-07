@@ -21,4 +21,22 @@
     <string name="vario_notification_channel_description">Shows barometric pressure monitoring status</string>
     <string name="stop_service_action">Stop</string>
     <string name="vario_notification_running_text">Running for: %1$s</string>
+
+    <!-- Log messages -->
+    <string name="log_adjust_qnh_invalid_pressure">Cannot adjust QNH without valid pressure reading.</string>
+    <string name="log_adjust_qnh_invalid_altitude">Cannot adjust QNH with invalid current altitude.</string>
+    <string name="log_qnh_adjusted">Adjusted QNH based on altitude change. Current Pressure: %1$.2f, Target Altitude: %2$.2f, New QNH: %3$.2f</string>
+    <string name="log_permission_granted_post_notifications">POST_NOTIFICATIONS permission granted</string>
+    <string name="log_permission_denied_post_notifications">POST_NOTIFICATIONS permission denied</string>
+    <string name="log_permission_already_granted_post_notifications">POST_NOTIFICATIONS permission already granted</string>
+    <string name="log_showing_rationale_post_notifications">Showing rationale for POST_NOTIFICATIONS permission</string>
+    <string name="log_requesting_post_notifications">Requesting POST_NOTIFICATIONS permission</string>
+    <string name="log_cannot_start_service_permission_denied">Cannot start VarioService, POST_NOTIFICATIONS permission not granted. Requesting again.</string>
+    <string name="log_received_broadcast_pressure_update">Received broadcast: P=%1$.1f, Alt=%2$.1f, VS=%3$.1f</string>
+    <string name="log_pressure_receiver_registered">Pressure receiver registered with LocalBroadcastManager</string>
+    <string name="log_pressure_receiver_unregistered">Pressure receiver unregistered from LocalBroadcastManager</string>
+
+    <!-- UI Text -->
+    <string name="button_minus">−</string>
+    <string name="button_plus">+</string>
 </resources>

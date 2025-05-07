@@ -245,7 +245,7 @@ class SoundSynthesizerService : Service() {
                 break
             }
 
-            var generateSoundThisCycle = false
+            val generateSoundThisCycle: Boolean
 
             if (this.shouldBeepForClimb && currentFreq > 0) {
                 val currentTime = System.currentTimeMillis()

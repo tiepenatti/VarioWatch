@@ -34,6 +34,7 @@ class VarioService : Service() {
     private lateinit var userPreferences: UserPreferences
     private var startTimeMillis: Long = 0L
     private var notificationUpdateJob: Job? = null
+    private lateinit var notificationManager: NotificationManager
 
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(
@@ -50,8 +51,9 @@ class VarioService : Service() {
         userPreferences = (applicationContext as VarioWatchApplication).userPreferences
         pressureSensorManager = PressureSensorManager(applicationContext, userPreferences)
         startTimeMillis = System.currentTimeMillis()
+        notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        setupNotification() // This will call startForeground
+        setupNotification()
         setupSensorCollection()
     }
 
@@ -89,10 +91,9 @@ class VarioService : Service() {
             Constants.NOTIFICATION_CHANNEL_NAME,
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = "Vario service status"
+            description = getString(R.string.vario_notification_channel_description)
         }
 
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
         Log.d(TAG, "Notification channel created.")
 
@@ -103,11 +104,11 @@ class VarioService : Service() {
             PendingIntent.getService(this, 0, stopServiceIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
         val notification = NotificationCompat.Builder(this, Constants.NOTIFICATION_CHANNEL_ID)
-            .setContentTitle("VarioWatch Active") // Hardcoded
-            .setContentText("Monitoring pressure changes...") // Hardcoded
+            .setContentTitle(getString(R.string.vario_notification_title))
+            .setContentText(getString(R.string.vario_notification_text))
             .setSmallIcon(android.R.drawable.ic_menu_compass)
             .setOngoing(true)
-            .addAction(android.R.drawable.ic_media_pause, "Stop", stopServicePendingIntent) // Hardcoded
+            .addAction(android.R.drawable.ic_media_pause, getString(R.string.stop_service_action), stopServicePendingIntent)
             .build()
 
         try {
@@ -136,7 +137,7 @@ class VarioService : Service() {
         val seconds = TimeUnit.MILLISECONDS.toSeconds(elapsedTimeMillis) % 60
         val timeString = String.format("%02d:%02d:%02d", hours, minutes, seconds)
 
-        val notificationText = "Running for: $timeString" // Hardcoded
+        val notificationText = getString(R.string.vario_notification_running_text, timeString)
 
         val stopServiceIntent = Intent(this, VarioService::class.java).apply {
             action = ACTION_STOP_SERVICE
@@ -145,14 +146,13 @@ class VarioService : Service() {
             PendingIntent.getService(this, 0, stopServiceIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
         val notification = NotificationCompat.Builder(this, Constants.NOTIFICATION_CHANNEL_ID)
-            .setContentTitle("VarioWatch Active") // Hardcoded
+            .setContentTitle(getString(R.string.vario_notification_title))
             .setContentText(notificationText)
             .setSmallIcon(android.R.drawable.ic_menu_compass)
             .setOngoing(true)
-            .addAction(android.R.drawable.ic_media_pause, "Stop", stopServicePendingIntent) // Hardcoded
+            .addAction(android.R.drawable.ic_media_pause, getString(R.string.stop_service_action), stopServicePendingIntent)
             .build()
 
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(Constants.SERVICE_NOTIFICATION_ID, notification)
     }
 
@@ -181,6 +181,5 @@ class VarioService : Service() {
             putExtra(EXTRA_VERTICAL_SPEED, state.verticalSpeed)
         }
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
-        // Log.d(TAG, "Broadcast sensor state update (local): P=${state.currentPressure}, Alt=${state.currentAltitude}, VS=${state.verticalSpeed}") // Optional: reduce verbose logging
     }
 }
