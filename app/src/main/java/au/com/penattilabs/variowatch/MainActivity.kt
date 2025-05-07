@@ -1,14 +1,18 @@
 package au.com.penattilabs.variowatch
 
+import android.Manifest // Added for permission
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager // Added for permission
+import android.os.Build // Added for version check
 import android.os.Bundle
 import android.util.Log // Add Log import
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts // Added for permission
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,7 +25,6 @@ import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.ButtonDefaults
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn // Updated import
-import androidx.wear.compose.foundation.lazy.items // Updated import for items
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -32,10 +35,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import au.com.penattilabs.variowatch.R
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.foundation.Canvas
 
 @Suppress("ktlint:standard:package-name")  // Suppress package name warning for R class import
@@ -89,9 +90,51 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            Log.d(TAG, "POST_NOTIFICATIONS permission granted")
+            // Permission is granted. You can now start the service if it wasn't started.
+            // Or, if you have a specific flow that depends on this, trigger it here.
+        } else {
+            Log.w(TAG, "POST_NOTIFICATIONS permission denied")
+            // Explain to the user that the feature is unavailable because the
+            // features requires a permission that the user has denied. At the
+            // same time, respect the user's decision. Don't link to system
+            // settings in an effort to convince the user to change their
+            // decision.
+        }
+    }
+
+    private fun askNotificationPermission() {
+        // This is only required on API level 33+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                Log.d(TAG, "POST_NOTIFICATIONS permission already granted")
+                // FCM SDK (and your app) can post notifications.
+            } else if (shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
+                // TODO: Display an educational UI explaining to the user the importance of the
+                // permission for the vario service notification. Then, request the permission.
+                Log.i(TAG, "Showing rationale for POST_NOTIFICATIONS permission")
+                // For now, just request it directly if rationale should be shown.
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                // Directly ask for the permission
+                Log.d(TAG, "Requesting POST_NOTIFICATIONS permission")
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         userPreferences = (application as VarioWatchApplication).userPreferences
+
+        // Ask for notification permission right away
+        askNotificationPermission()
 
         // Initialize StateFlows
         _qnhState = MutableStateFlow(userPreferences.qnh)
@@ -255,8 +298,17 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startVarioService() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "Cannot start VarioService, POST_NOTIFICATIONS permission not granted. Requesting again.")
+            askNotificationPermission() // Request permission if not granted
+            // Optionally, inform the user that the service cannot start without the permission.
+            // You might want to prevent the service from starting or update UI accordingly.
+            return // Prevent starting if permission is critical and not granted
+        }
+
         val serviceIntent = VarioService.createIntent(this)
-        startService(serviceIntent)
+        ContextCompat.startForegroundService(this, serviceIntent)
         _uiState.update { it.copy(isVarioRunning = true) }
     }
 

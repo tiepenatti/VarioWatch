@@ -19,4 +19,6 @@
     <string name="vario_notification_title">VarioWatch Active</string>
     <string name="vario_notification_text">Monitoring pressure changes…</string>
     <string name="vario_notification_channel_description">Shows barometric pressure monitoring status</string>
+    <string name="stop_service_action">Stop</string>
+    <string name="vario_notification_running_text">Running for: %1$s</string>
 </resources>
