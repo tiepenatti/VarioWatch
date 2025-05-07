@@ -2,8 +2,11 @@ package au.com.penattilabs.variowatch
 
 import android.content.Context
 import java.io.BufferedReader
+import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStreamReader
+import java.io.OutputStreamWriter
 import kotlin.math.abs
 
 data class TonePoint(
@@ -89,6 +92,23 @@ data class VarioSoundConfig(
 }
 
 object SoundProfileParser {
+    private const val DEFAULT_PROFILE_CONTENT = """ClimbToneOnThreshold=0.2
+ClimbToneOffThreshold=0.15
+SinkToneOnThreshold=-3
+SinkToneOffThreshold=-3
+tone=-10.0,200,100,100
+tone=-3.0,280,100,100
+tone=-0.51,300,500,100
+tone=-0.50,200,800,5
+tone=0.09,400,600,10
+tone=0.11,401,600,50
+tone=1.16,550,552,52
+tone=2.67,763,483,55
+tone=4.24,985,412,58
+tone=6.00,1234,322,62
+tone=8.00,1517,241,66
+tone=10.00,2000,150,70"""
+
     fun parse(configString: String): VarioSoundConfig {
         val lines = configString.lines()
             .map { it.trim() }
@@ -154,7 +174,52 @@ object SoundProfileParser {
             System.err.println("SoundProfileParser: Error loading config file '$fileName' from assets: ${e.message}")
             e.printStackTrace()
             // Optionally, return a default configuration or re-throw to indicate critical failure
+            createDefaultProfile(context, fileName)
             null
+        }
+    }
+
+    fun loadFromAssetsOrInternal(context: Context, fileName: String): VarioSoundConfig? {
+        return try {
+            context.assets.open(fileName).use { inputStream ->
+                BufferedReader(InputStreamReader(inputStream)).use { reader ->
+                    val content = reader.readText()
+                    return parse(content)
+                }
+            }
+        } catch (e: IOException) {
+            System.err.println("SoundProfileParser: Error loading config file '$fileName' from assets: ${e.message}")
+            e.printStackTrace()
+
+            val internalFile = File(context.filesDir, fileName)
+            if (internalFile.exists()) {
+                return try {
+                    internalFile.bufferedReader().use { reader ->
+                        val content = reader.readText()
+                        parse(content)
+                    }
+                } catch (e: IOException) {
+                    System.err.println("SoundProfileParser: Error loading config file '$fileName' from internal storage: ${e.message}")
+                    null
+                }
+            } else {
+                createDefaultProfile(context, fileName)
+                null
+            }
+        }
+    }
+
+    private fun createDefaultProfile(context: Context, fileName: String) {
+        try {
+            val file = File(context.filesDir, fileName)
+            FileOutputStream(file).use { fos ->
+                OutputStreamWriter(fos).use { writer ->
+                    writer.write(DEFAULT_PROFILE_CONTENT)
+                }
+            }
+            System.out.println("SoundProfileParser: Default sound profile created at: ${file.absolutePath}")
+        } catch (e: IOException) {
+            System.err.println("SoundProfileParser: Failed to create default sound profile: ${e.message}")
         }
     }
 }

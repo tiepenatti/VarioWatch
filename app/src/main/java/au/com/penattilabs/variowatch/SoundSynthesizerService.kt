@@ -64,7 +64,7 @@ class SoundSynthesizerService : Service() {
         Log.d(TAG, "Service creating")
 
         // Load the sound profile
-        varioSoundConfig = SoundProfileParser.loadFromAssets(this, "sound_profile.txt")
+        varioSoundConfig = SoundProfileParser.loadFromAssetsOrInternal(this, "sound_profile.txt")
         if (varioSoundConfig == null) {
             Log.e(TAG, "Failed to load sound_profile.txt. Sound will be disabled or use fallback if implemented.")
             // Consider implementing a fallback to default hardcoded sounds or disabling sound
@@ -79,6 +79,8 @@ class SoundSynthesizerService : Service() {
             IntentFilter(VarioService.ACTION_PRESSURE_UPDATE)
         )
         Log.d(TAG, "Receiver registered with LocalBroadcastManager")
+
+        updateAmplitudeFromPreferences() // Initialize amplitude from preferences
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -265,6 +267,9 @@ class SoundSynthesizerService : Service() {
             val localCycleMillis = this.currentCycleMillis
             val localDutyPercent = this.currentDutyPercent
 
+            // Add debug logging to show the frequency being produced
+            Log.d(TAG, "generateToneLoop: Producing tone with frequency: $localFreq Hz, cycle: $localCycleMillis ms, duty: $localDutyPercent%")
+
             if (audioTrack == null || audioTrack?.playState != AudioTrack.PLAYSTATE_PLAYING) {
                 Log.w(TAG, "generateToneLoop: AudioTrack is null or not playing, exiting loop.")
                 break // Exit if AudioTrack is not ready
@@ -324,4 +329,24 @@ class SoundSynthesizerService : Service() {
         Log.d(TAG, "Volume set to level $level (normalized: $currentVolume)")
         // Amplitude is updated dynamically in the generation loop
     }
-}
+
+    private var amplitudeMultiplier: Float = 1.0f // Default multiplier for amplitude
+
+    fun setAmplitudeMultiplier(multiplier: Float) {
+        amplitudeMultiplier = multiplier.coerceAtLeast(1.0f) // Ensure multiplier is at least 1.0
+        Log.d(TAG, "Amplitude multiplier set to $amplitudeMultiplier")
+    }
+
+    // Add logic to read the volume level from user preferences and adjust the amplitude multiplier
+    private fun updateAmplitudeFromPreferences() {
+        val volumeLevel = userPreferences.getVolumeLevel() // Assume this method exists
+        val multiplier = when (volumeLevel) {
+            0 -> 0.0f // No sound
+            1 -> 0.33f // Low
+            2 -> 0.66f // Medium
+            3 -> 1.0f // High
+            else -> 1.0f // Default to High if invalid
+        }
+        setAmplitudeMultiplier(multiplier)
+        Log.d(TAG, "Amplitude updated based on preferences: level=$volumeLevel, multiplier=$multiplier")
+    }

@@ -446,6 +446,40 @@ internal fun SettingsContent(
         }
 
         item {
+            Text(
+                text = stringResource(R.string.volume_settings),
+                modifier = Modifier.padding(top = MainActivity.UI.VERTICAL_PADDING_LARGE.dp, bottom = MainActivity.UI.VERTICAL_PADDING_SMALL.dp)
+            )
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                Button(
+                    onClick = { userPreferences.updateVolumeLevel(0) },
+                    modifier = Modifier.padding(4.dp),
+                ) { Text(stringResource(R.string.volume_off)) }
+
+                Button(
+                    onClick = { userPreferences.updateVolumeLevel(1) },
+                    modifier = Modifier.padding(4.dp),
+                ) { Text(stringResource(R.string.volume_low)) }
+
+                Button(
+                    onClick = { userPreferences.updateVolumeLevel(2) },
+                    modifier = Modifier.padding(4.dp),
+                ) { Text(stringResource(R.string.volume_medium)) }
+
+                Button(
+                    onClick = { userPreferences.updateVolumeLevel(3) },
+                    modifier = Modifier.padding(4.dp),
+                ) { Text(stringResource(R.string.volume_high)) }
+            }
+        }
+
+        item {
             Button(
                 onClick = onBackClick,
                 modifier = Modifier
