@@ -9,6 +9,7 @@ class UserPreferences(context: Context) : android.os.Parcelable {
         private const val PREF_NAME = "vario_prefs"
         private const val KEY_USE_METRIC_UNITS = "use_metric_units"
         private const val KEY_QNH = "qnh"
+        private const val KEY_VOLUME_LEVEL = "volume_level" // Key for volume level
         private lateinit var applicationContext: Context
         
         @JvmField
@@ -66,6 +67,14 @@ class UserPreferences(context: Context) : android.os.Parcelable {
 
     fun updateQnh(newQnh: Float) {
         qnh = newQnh
+    }
+
+    fun getVolumeLevel(): Int {
+        return sharedPreferences.getInt(KEY_VOLUME_LEVEL, 3) // Default to 3 (High)
+    }
+
+    fun updateVolumeLevel(level: Int) {
+        sharedPreferences.edit().putInt(KEY_VOLUME_LEVEL, level).apply()
     }
 
     // Remove updateCurrentAltitude and adjustAltitude functions

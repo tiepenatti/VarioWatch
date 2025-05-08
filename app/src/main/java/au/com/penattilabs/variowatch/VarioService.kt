@@ -45,6 +45,9 @@ class VarioService : Service() {
         }
     )
 
+    private val pressureReadings = mutableListOf<Float>() // Buffer for moving average
+    private val maxBufferSize = 10 // Buffer size for 10 readings (1 second at 10Hz)
+
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "VarioService onCreate")
@@ -156,6 +159,14 @@ class VarioService : Service() {
         notificationManager.notify(Constants.SERVICE_NOTIFICATION_ID, notification)
     }
 
+    private fun calculateMovingAverage(newReading: Float): Float {
+        if (pressureReadings.size >= maxBufferSize) {
+            pressureReadings.removeAt(0) // Remove oldest reading
+        }
+        pressureReadings.add(newReading)
+        return pressureReadings.average().toFloat()
+    }
+
     private fun setupSensorCollection() {
         serviceScope.launch {
             pressureSensorManager.sensorState
@@ -164,7 +175,9 @@ class VarioService : Service() {
                         Log.e(TAG, "Sensor error: $it")
                     }
                     if (state.currentPressure > 0f) {
-                        sendSensorStateUpdate(state)
+                        val smoothedPressure = calculateMovingAverage(state.currentPressure)
+                        val smoothedState = state.copy(currentPressure = smoothedPressure)
+                        sendSensorStateUpdate(smoothedState)
                     }
                 }
                 .catch { error ->

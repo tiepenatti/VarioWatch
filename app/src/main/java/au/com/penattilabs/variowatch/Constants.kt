@@ -5,8 +5,12 @@ package au.com.penattilabs.variowatch
  */
 object Constants {
     // Service constants
-    const val SENSOR_SAMPLING_PERIOD_US = 200000 // 200ms sampling period (5Hz) for better battery life
-    const val SENSOR_BATCH_LATENCY_US = 1000000 // 1s batching for power efficiency
+    const val SENSOR_SAMPLING_PERIOD_US_HIGH = 100000 // 100ms sampling period (10Hz) for better feedback
+    const val SENSOR_SAMPLING_PERIOD_US_LOW = 333000 // 333ms sampling period (3Hz) for better battery life
+    const val SENSOR_SAMPLING_PERIOD_US = SENSOR_SAMPLING_PERIOD_US_HIGH
+    const val SENSOR_BATCH_LATENCY_US_HIGH = 1000000 // 1s batching for power efficiency
+    const val SENSOR_BATCH_LATENCY_US_LOW = 500000 // .5s batching for performance
+    const val SENSOR_BATCH_LATENCY_US = SENSOR_BATCH_LATENCY_US_LOW
     const val SERVICE_NOTIFICATION_ID = 1
     const val NOTIFICATION_CHANNEL_ID = "vario_service_channel"
     const val NOTIFICATION_CHANNEL_NAME = "Vario Service"

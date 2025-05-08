@@ -59,9 +59,11 @@ class SoundSynthesizerService : Service() {
         }
     }
 
+    private lateinit var userPreferences: UserPreferences
+
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "Service creating")
+        userPreferences = (applicationContext as VarioWatchApplication).userPreferences
 
         // Load the sound profile
         varioSoundConfig = SoundProfileParser.loadFromAssetsOrInternal(this, "sound_profile.txt")
@@ -350,3 +352,4 @@ class SoundSynthesizerService : Service() {
         setAmplitudeMultiplier(multiplier)
         Log.d(TAG, "Amplitude updated based on preferences: level=$volumeLevel, multiplier=$multiplier")
     }
+}

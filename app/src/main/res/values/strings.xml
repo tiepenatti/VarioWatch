@@ -39,4 +39,11 @@
     <!-- UI Text -->
     <string name="button_minus">−</string>
     <string name="button_plus">+</string>
+
+    <!-- Volume Settings -->
+    <string name="volume_settings">Volume Settings</string>
+    <string name="volume_off">Off</string>
+    <string name="volume_low">Low</string>
+    <string name="volume_medium">Medium</string>
+    <string name="volume_high">High</string>
 </resources>

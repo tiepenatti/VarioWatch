@@ -10,7 +10,6 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -24,7 +23,6 @@ import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.ButtonDefaults
 import androidx.wear.compose.material.Text
-import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -35,9 +33,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.Canvas
+import au.com.penattilabs.variowatch.SettingsContent
+import au.com.penattilabs.variowatch.VerticalSpeedIndicator
 
 @Suppress("ktlint:standard:package-name")
 class MainActivity : ComponentActivity() {
@@ -168,7 +165,8 @@ class MainActivity : ComponentActivity() {
                                 currentAltitude = currentUiState.currentAltitude,
                                 onAdjustAltitude = { increase ->
                                     adjustQnhBasedOnAltitudeAdjustment(increase)
-                                }
+                                },
+                                userPreferences = userPreferences // Pass userPreferences here
                             )
                         } else {
                             Column(
@@ -333,159 +331,5 @@ class MainActivity : ComponentActivity() {
 
         // Log the adjustment
         Log.d(TAG, getString(R.string.log_qnh_adjusted, currentPressure, targetAltitude, newQnh))
-    }
-}
-
-@Composable
-internal fun VerticalSpeedIndicator(
-    verticalSpeed: Float,
-    useMetricUnits: Boolean,
-    modifier: Modifier = Modifier,
-    maxSpeedMetric: Float = 5.0f, // m/s
-    maxSpeedImperial: Float = 984.252f, // ft/min (approx 5 m/s)
-    strokeWidth: Float = 15.0f
-) {
-    Canvas(modifier = modifier.fillMaxSize()) {
-        val maxSpeed = if (useMetricUnits) maxSpeedMetric else maxSpeedImperial
-        val sweepAngleRange = 90f // 90 degrees for positive (3 o'clock to 12 o'clock), 90 for negative (3 o'clock to 6 o'clock)
-
-        val currentSpeedClamped = verticalSpeed.coerceIn(-maxSpeed, maxSpeed)
-        val normalizedSpeed = currentSpeedClamped / maxSpeed // -1 to 1
-
-        val sweepAngle = normalizedSpeed * sweepAngleRange
-
-        // 0 degrees is 3 o'clock. Positive angles are counter-clockwise.
-        // We want positive speeds to go up (towards 12 o'clock, which is 270 or -90 degrees)
-        // and negative speeds to go down (towards 6 o'clock, which is 90 degrees)
-        val startAngle = 0f // Start at 3 o'clock
-
-        val indicatorColor = when {
-            normalizedSpeed > 0 -> Color.Green
-            normalizedSpeed < 0 -> Color.Red
-            else -> Color.Transparent // No indicator if speed is zero
-        }
-
-        if (normalizedSpeed != 0f) {
-            drawArc(
-                color = indicatorColor,
-                startAngle = if (normalizedSpeed > 0) startAngle - sweepAngle else startAngle, // Adjust start for positive to draw upwards
-                sweepAngle = if (normalizedSpeed > 0) sweepAngle else -sweepAngle, // Negative sweep for sinking
-                useCenter = false,
-                style = Stroke(width = strokeWidth)
-            )
-        }
-    }
-}
-
-@Composable
-internal fun SettingsContent(
-    useMetricUnits: Boolean,
-    onToggleUnits: () -> Unit,
-    onBackClick: () -> Unit,
-    currentAltitude: Float,
-    onAdjustAltitude: (increase: Boolean) -> Unit
-) {
-    BackHandler(onBack = onBackClick)
-
-    ScalingLazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = MainActivity.UI.HORIZONTAL_PADDING.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        item {
-            Text(
-                text = stringResource(R.string.settings),
-                modifier = Modifier.padding(vertical = MainActivity.UI.VERTICAL_PADDING_MEDIUM.dp)
-            )
-        }
-
-        item {
-            Button(
-                onClick = onToggleUnits,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = MainActivity.UI.VERTICAL_PADDING_SMALL.dp)
-            ) {
-                Text(text = stringResource(
-                    if (useMetricUnits) R.string.altitude_unit_metric
-                    else R.string.altitude_unit_imperial
-                ))
-            }
-        }
-
-        item {
-            Text(
-                text = stringResource(R.string.calibrate_altitude),
-                modifier = Modifier.padding(top = MainActivity.UI.VERTICAL_PADDING_LARGE.dp, bottom = MainActivity.UI.VERTICAL_PADDING_SMALL.dp)
-            )
-        }
-
-        item {
-            Text(
-                text = AltitudeCalculator.formatAltitude(currentAltitude, useMetricUnits),
-                modifier = Modifier.padding(vertical = MainActivity.UI.VERTICAL_PADDING_SMALL.dp)
-            )
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                Button(
-                    onClick = { onAdjustAltitude(false) },
-                    modifier = Modifier.padding(4.dp),
-                ) { Text(stringResource(R.string.button_minus)) }
-
-                Button(
-                    onClick = { onAdjustAltitude(true) },
-                    modifier = Modifier.padding(4.dp),
-                ) { Text(stringResource(R.string.button_plus)) }
-            }
-        }
-
-        item {
-            Text(
-                text = stringResource(R.string.volume_settings),
-                modifier = Modifier.padding(top = MainActivity.UI.VERTICAL_PADDING_LARGE.dp, bottom = MainActivity.UI.VERTICAL_PADDING_SMALL.dp)
-            )
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                Button(
-                    onClick = { userPreferences.updateVolumeLevel(0) },
-                    modifier = Modifier.padding(4.dp),
-                ) { Text(stringResource(R.string.volume_off)) }
-
-                Button(
-                    onClick = { userPreferences.updateVolumeLevel(1) },
-                    modifier = Modifier.padding(4.dp),
-                ) { Text(stringResource(R.string.volume_low)) }
-
-                Button(
-                    onClick = { userPreferences.updateVolumeLevel(2) },
-                    modifier = Modifier.padding(4.dp),
-                ) { Text(stringResource(R.string.volume_medium)) }
-
-                Button(
-                    onClick = { userPreferences.updateVolumeLevel(3) },
-                    modifier = Modifier.padding(4.dp),
-                ) { Text(stringResource(R.string.volume_high)) }
-            }
-        }
-
-        item {
-            Button(
-                onClick = onBackClick,
-                modifier = Modifier
-                    .padding(top = MainActivity.UI.VERTICAL_PADDING_LARGE.dp, bottom = MainActivity.UI.VERTICAL_PADDING_SMALL.dp)
-                    .fillMaxWidth(),
-            ) { Text(text = stringResource(R.string.back)) }
-        }
     }
 }
