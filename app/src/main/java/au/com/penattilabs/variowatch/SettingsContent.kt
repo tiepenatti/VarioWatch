@@ -90,27 +90,29 @@ fun SettingsContent(
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Button(
-                    onClick = { userPreferences.updateVolumeLevel(0) },
+                    onClick = { userPreferences.updateVolumeLevel((userPreferences.getVolumeLevel() - 1).coerceAtLeast(0)) },
                     modifier = Modifier.padding(4.dp),
-                ) { Text(stringResource(R.string.volume_off)) }
+                ) { Text("-") }
+
+                Text(
+                    text = when (userPreferences.getVolumeLevel()) {
+                        0 -> stringResource(R.string.volume_off)
+                        1 -> stringResource(R.string.volume_low)
+                        2 -> stringResource(R.string.volume_medium)
+                        3 -> stringResource(R.string.volume_high)
+                        else -> "---"
+                    },
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
 
                 Button(
-                    onClick = { userPreferences.updateVolumeLevel(1) },
+                    onClick = { userPreferences.updateVolumeLevel((userPreferences.getVolumeLevel() + 1).coerceAtMost(3)) },
                     modifier = Modifier.padding(4.dp),
-                ) { Text(stringResource(R.string.volume_low)) }
-
-                Button(
-                    onClick = { userPreferences.updateVolumeLevel(2) },
-                    modifier = Modifier.padding(4.dp),
-                ) { Text(stringResource(R.string.volume_medium)) }
-
-                Button(
-                    onClick = { userPreferences.updateVolumeLevel(3) },
-                    modifier = Modifier.padding(4.dp),
-                ) { Text(stringResource(R.string.volume_high)) }
+                ) { Text("+") }
             }
         }
 

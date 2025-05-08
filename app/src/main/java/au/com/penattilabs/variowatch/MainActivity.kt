@@ -175,14 +175,7 @@ class MainActivity : ComponentActivity() {
                                 verticalArrangement = Arrangement.Center
                             ) {
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    // Vertical Speed Indicator - Drawn first to be in the background
-                                    if (currentUiState.isVarioRunning) {
-                                        VerticalSpeedIndicator(
-                                            verticalSpeed = currentUiState.verticalSpeed,
-                                            useMetricUnits = currentUseMetricUnits
-                                        )
-                                    }
-
+                                    // Main content (buttons or text+buttons) is drawn first
                                     if (!currentUiState.isVarioRunning) {
                                         Column(
                                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -206,7 +199,7 @@ class MainActivity : ComponentActivity() {
                                                 Text(text = stringResource(R.string.settings))
                                             }
                                         }
-                                    } else {
+                                    } else { // This is when currentUiState.isVarioRunning is true
                                         Column(
                                             modifier = Modifier.fillMaxSize(),
                                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -260,6 +253,14 @@ class MainActivity : ComponentActivity() {
                                                 Text(text = stringResource(R.string.settings))
                                             }
                                         }
+                                    }
+
+                                    // Vertical Speed Indicator - Drawn last to be in the foreground
+                                    if (currentUiState.isVarioRunning) {
+                                        VerticalSpeedIndicator(
+                                            verticalSpeed = currentUiState.verticalSpeed,
+                                            useMetricUnits = currentUseMetricUnits
+                                        )
                                     }
                                 }
                             }
