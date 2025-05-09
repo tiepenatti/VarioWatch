@@ -48,6 +48,10 @@ class VarioService : Service() {
     private val pressureReadings = mutableListOf<Float>() // Buffer for moving average
     private val maxBufferSize = 10 // Buffer size for 10 readings (1 second at 10Hz)
 
+    // Add fields to store last altitude and timestamp for VS calculation in VarioService
+    private var serviceLastAltitude: Float = Float.NaN
+    private var serviceLastTimestampNanos: Long = 0L
+
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "VarioService onCreate")
@@ -55,6 +59,10 @@ class VarioService : Service() {
         pressureSensorManager = PressureSensorManager(applicationContext, userPreferences)
         startTimeMillis = System.currentTimeMillis()
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // Initialize/reset last known values for VS calculation
+        serviceLastAltitude = Float.NaN
+        serviceLastTimestampNanos = 0L
 
         setupNotification()
         setupSensorCollection()
@@ -67,6 +75,9 @@ class VarioService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        // Reset last known values when sensor starts, to avoid stale VS calculations
+        serviceLastAltitude = Float.NaN
+        serviceLastTimestampNanos = 0L
         pressureSensorManager.startSensor()
         startService(Intent(this, SoundSynthesizerService::class.java))
         Log.d(TAG, "SoundSynthesizerService started")
@@ -170,18 +181,63 @@ class VarioService : Service() {
     private fun setupSensorCollection() {
         serviceScope.launch {
             pressureSensorManager.sensorState
-                .onEach { state ->
-                    state.error?.let {
+                .onEach { stateFromManager -> // Renamed to avoid confusion
+                    stateFromManager.error?.let {
                         Log.e(TAG, "Sensor error: $it")
+                        // Potentially reset serviceLastAltitude/Timestamp if sensor error is critical
                     }
-                    if (state.currentPressure > 0f) {
-                        val smoothedPressure = calculateMovingAverage(state.currentPressure)
-                        val smoothedState = state.copy(currentPressure = smoothedPressure)
-                        sendSensorStateUpdate(smoothedState)
+                    if (stateFromManager.currentPressure > 0f && stateFromManager.eventTimestampNanos > 0L) {
+                        val smoothedPressure = calculateMovingAverage(stateFromManager.currentPressure)
+                        
+                        val newAltitude = AltitudeCalculator.calculateAltitude(smoothedPressure, userPreferences.qnh)
+                        var newVerticalSpeed = Float.NaN
+
+                        if (serviceLastTimestampNanos > 0L && !serviceLastAltitude.isNaN() && !newAltitude.isNaN()) {
+                            // Use eventTimestampNanos from the state, which corresponds to the current batch of readings
+                            val timeDiffSeconds = (stateFromManager.eventTimestampNanos - serviceLastTimestampNanos) / 1_000_000_000.0f
+                            if (timeDiffSeconds > 0.01f) { // Min time diff to avoid erratic VS
+                                newVerticalSpeed = (newAltitude - serviceLastAltitude) / timeDiffSeconds
+                            } else {
+                                // If time diff is too small, newVerticalSpeed will remain NaN.
+                                // This is acceptable as it indicates insufficient data for a new reliable VS.
+                                Log.v(TAG, "VarioService: Time difference for VS calc too small ($timeDiffSeconds s). VS will be NaN or stale if not updated.")
+                            }
+                        }
+
+                        serviceLastAltitude = newAltitude
+                        serviceLastTimestampNanos = stateFromManager.eventTimestampNanos
+
+                        // Create the state to broadcast with values derived from smoothedPressure
+                        val broadcastState = PressureSensorManager.PressureSensorState(
+                            currentPressure = smoothedPressure,
+                            currentAltitude = newAltitude,
+                            verticalSpeed = newVerticalSpeed,
+                            eventTimestampNanos = stateFromManager.eventTimestampNanos, // Pass along if needed by receivers
+                            isRegistered = stateFromManager.isRegistered,
+                            error = stateFromManager.error
+                        )
+                        sendSensorStateUpdate(broadcastState)
+                    } else if (stateFromManager.currentPressure <= 0f) {
+                        // If pressure is invalid, reset altitude and VS to NaN for broadcast
+                         val broadcastState = PressureSensorManager.PressureSensorState(
+                            currentPressure = stateFromManager.currentPressure, // or 0f
+                            currentAltitude = Float.NaN,
+                            verticalSpeed = Float.NaN,
+                            eventTimestampNanos = stateFromManager.eventTimestampNanos,
+                            isRegistered = stateFromManager.isRegistered,
+                            error = stateFromManager.error // keep existing error or set new one
+                        )
+                        sendSensorStateUpdate(broadcastState)
+                        // Also reset internal VS calculation state for VarioService
+                        serviceLastAltitude = Float.NaN
+                        serviceLastTimestampNanos = 0L // Reset to ensure fresh VS calc when pressure is valid again
                     }
                 }
                 .catch { error ->
                     Log.e(TAG, "Error collecting sensor state: ${error.message}", error)
+                     // Reset internal VS calculation state on error
+                    serviceLastAltitude = Float.NaN
+                    serviceLastTimestampNanos = 0L
                 }
                 .collect()
         }

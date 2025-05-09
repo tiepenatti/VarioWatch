@@ -33,6 +33,7 @@ class PressureSensorManager(context: Context, private val userPreferences: UserP
         val currentPressure: Float = 0f,
         val currentAltitude: Float = Float.NaN,
         val verticalSpeed: Float = Float.NaN,
+        val eventTimestampNanos: Long = 0L, // Added field for event timestamp
         val isRegistered: Boolean = false,
         val error: SensorError? = null
     )
@@ -147,7 +148,7 @@ class PressureSensorManager(context: Context, private val userPreferences: UserP
     override fun onSensorChanged(event: SensorEvent?) {
         event?.let {
             if (it.sensor.type == Sensor.TYPE_PRESSURE) {
-                val currentTimestamp = it.timestamp
+                val currentTimestamp = it.timestamp // This is event.timestamp in nanoseconds
                 val pressure = it.values[0]
                 
                 if (System.currentTimeMillis() - warmupStartTime < Constants.SENSOR_WARMUP_TIME_MS) {
@@ -166,21 +167,22 @@ class PressureSensorManager(context: Context, private val userPreferences: UserP
 
                     if (lastTimestamp > 0L && !lastAltitude.isNaN() && !currentAltitude.isNaN()) {
                         val timeDiffSeconds = (currentTimestamp - lastTimestamp) / 1_000_000_000.0f
-                        if (timeDiffSeconds > 0.05f) {
+                        if (timeDiffSeconds > 0.05f) { // Increased minimum time diff to 0.05s
                             verticalSpeed = (currentAltitude - lastAltitude) / timeDiffSeconds
                         } else {
                             verticalSpeed = _sensorState.value.verticalSpeed 
-                            Log.v(TAG, "Time difference too small ($timeDiffSeconds s), reusing last VS.")
+                            Log.v(TAG, "Time difference too small ($timeDiffSeconds s), reusing last VS from manager state.")
                         }
                     } else {
-                         Log.v(TAG, "Not enough data to calculate vertical speed yet.")
+                         Log.v(TAG, "Not enough data to calculate vertical speed yet in manager.")
                     }
                     
                     _sensorState.update { state ->
                         state.copy(
                             currentPressure = medianPressure,
-                            currentAltitude = currentAltitude,
-                            verticalSpeed = verticalSpeed,
+                            currentAltitude = currentAltitude, // Altitude from median pressure
+                            verticalSpeed = verticalSpeed,     // VS from median pressure
+                            eventTimestampNanos = currentTimestamp, // Pass the event timestamp
                             error = state.error
                         )
                     }
