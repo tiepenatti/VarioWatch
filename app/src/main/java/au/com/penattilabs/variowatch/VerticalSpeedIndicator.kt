@@ -12,40 +12,52 @@ fun VerticalSpeedIndicator(
     verticalSpeed: Float,
     useMetricUnits: Boolean,
     modifier: Modifier = Modifier,
-    maxSpeedMetric: Float = 5.0f, // m/s
-    maxSpeedImperial: Float = 984.252f, // ft/min (approx 5 m/s)
-    strokeWidth: Float = 30.0f // Increased width
+    maxSpeedMetric: Float = 10.0f, // m/s (remains 10.0f)
+    maxSpeedImperial: Float = 1968.504f, // ft/min (approx 10 m/s)
+    strokeWidth: Float = 30.0f // remains 30.0f
 ) {
     Canvas(modifier = modifier.fillMaxSize()) {
         val maxSpeed = if (useMetricUnits) maxSpeedMetric else maxSpeedImperial
-        val sweepAngleRange = 90f // 90 degrees for positive (3 o'clock to 12 o'clock), 90 for negative (3 o'clock to 6 o'clock)
 
         val currentSpeedClamped = verticalSpeed.coerceIn(-maxSpeed, maxSpeed)
-        val normalizedSpeed = currentSpeedClamped / maxSpeed // -1 to 1
+        // Normalize speed from -1 (max sink) to +1 (max climb)
+        val normalizedSpeed = currentSpeedClamped / maxSpeed
 
-        val sweepAngle = normalizedSpeed * sweepAngleRange
-
-        // Draw the background arc
+        // Background Arc:
+        // Starts at 10.5 o'clock (-135 degrees from 3 o'clock, assuming positive sweep is CW for drawArc)
+        // Sweeps 270 degrees clockwise to 7.5 o'clock (135 degrees from 3 o'clock)
+        val backgroundStartAngle = -135f
+        val backgroundSweepAngle = 270f
         drawArc(
             color = Color.DarkGray,
-            startAngle = -90f, // Start at 12 o'clock
-            sweepAngle = 180f, // Full range from 6 o'clock to 12 o'clock
+            startAngle = backgroundStartAngle,
+            sweepAngle = backgroundSweepAngle,
             useCenter = false,
             style = Stroke(width = strokeWidth)
         )
 
-        // Draw the indicator arc
+        // Indicator Arc:
+        // Starts at 3 o'clock (0 degrees).
+        // Positive speed (climb) sweeps anti-clockwise (negative sweepAngle for drawArc).
+        // Negative speed (sink) sweeps clockwise (positive sweepAngle for drawArc).
+        val indicatorStartAngle = 0f
+        // Max sweep for climb is -135 deg (CCW), for sink is +135 deg (CW)
+        // normalizedSpeed * -135f achieves this: 
+        // e.g. climb (norm=1): 1 * -135 = -135 (CCW)
+        // e.g. sink (norm=-1): -1 * -135 = 135 (CW)
+        val actualSweepAngle = normalizedSpeed * -135.0f
+
         val indicatorColor = when {
-            normalizedSpeed > 0 -> Color.Green
-            normalizedSpeed < 0 -> Color.Red
-            else -> Color.Transparent // No indicator if speed is zero
+            normalizedSpeed > 0.001f -> Color.Green
+            normalizedSpeed < -0.001f -> Color.Red
+            else -> Color.Transparent
         }
 
-        if (normalizedSpeed != 0f) {
+        if (indicatorColor != Color.Transparent) {
             drawArc(
                 color = indicatorColor,
-                startAngle = if (normalizedSpeed > 0) -90f else 90f, // Adjust start for positive to draw upwards
-                sweepAngle = if (normalizedSpeed > 0) sweepAngle else -sweepAngle, // Negative sweep for sinking
+                startAngle = indicatorStartAngle,
+                sweepAngle = actualSweepAngle,
                 useCenter = false,
                 style = Stroke(width = strokeWidth)
             )

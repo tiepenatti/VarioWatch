@@ -44,8 +44,9 @@ class MainActivity : ComponentActivity() {
 
     object UI {
         const val DEFAULT_PRESSURE = 0f
-        const val BUTTON_WIDTH_FRACTION = 0.8f
+        const val BUTTON_WIDTH_FRACTION = 0.6f
         const val HORIZONTAL_PADDING = 16
+        const val VERTICAL_PADDING_ZERO = 0
         const val VERTICAL_PADDING_TINY = 3
         const val VERTICAL_PADDING_SMALL = 8
         const val VERTICAL_PADDING_MEDIUM = 16
@@ -112,10 +113,8 @@ class MainActivity : ComponentActivity() {
                 Log.d(TAG, getString(R.string.log_permission_already_granted_post_notifications))
                 // FCM SDK (and your app) can post notifications.
             } else if (shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
-                // TODO: Display an educational UI explaining to the user the importance of the
-                // permission for the vario service notification. Then, request the permission.
+                // note: we could consider adding a message explaining why we need to show notifications but keep simple for now
                 Log.i(TAG, getString(R.string.log_showing_rationale_post_notifications))
-                // For now, just request it directly if rationale should be shown.
                 requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             } else {
                 // Directly ask for the permission
@@ -129,7 +128,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         userPreferences = (application as VarioWatchApplication).userPreferences
 
-        // Ask for notification permission right away
         askNotificationPermission()
 
         // Initialize StateFlows
@@ -166,7 +164,7 @@ class MainActivity : ComponentActivity() {
                                 onAdjustAltitude = { increase ->
                                     adjustQnhBasedOnAltitudeAdjustment(increase)
                                 },
-                                userPreferences = userPreferences // Pass userPreferences here
+                                userPreferences = userPreferences
                             )
                         } else {
                             Column(
@@ -207,7 +205,7 @@ class MainActivity : ComponentActivity() {
                                         ) {
                                             Column(
                                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                                modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
+                                                modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_ZERO.dp)
                                             ) {
                                                 Text(
                                                     text = AltitudeCalculator.formatAltitude(currentUiState.currentAltitude, currentUseMetricUnits)
@@ -219,24 +217,21 @@ class MainActivity : ComponentActivity() {
                                                     fontSize = UI.VERTICAL_SPEED_FONT_SIZE
                                                 )
                                             
-                                                // Display Pressure (Commented out)
+                                                // Display Pressure and QNH (not in use for now)
                                                 /*
                                                 Text(
                                                     text = stringResource(R.string.pressure_format).format(currentUiState.currentPressure),
-                                                    modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
                                                 )
-                                                */
-                                                // Optional: Display QNH for debugging
-                                                // Text(
-                                                //     text = "QNH: %.2f".format(currentQnh),
-                                                //     modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
-                                                // )
+                                                Text(
+                                                     text = "QNH: %.2f".format(currentQnh),
+                                                     modifier = Modifier.padding(bottom = UI.VERTICAL_PADDING_SMALL.dp)
+                                                 )*/
                                             }
 
                                             Button(
                                                 onClick = { stopVarioService() },
                                                 modifier = Modifier
-                                                    .padding(top = UI.VERTICAL_PADDING_TINY.dp)
+                                                    .padding(top = UI.VERTICAL_PADDING_ZERO.dp)
                                                     .fillMaxWidth(UI.BUTTON_WIDTH_FRACTION),
                                                 colors = ButtonDefaults.primaryButtonColors()
                                             ) {
