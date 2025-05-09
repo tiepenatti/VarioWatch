@@ -161,7 +161,7 @@ class VarioService : Service() {
 
     private fun calculateMovingAverage(newReading: Float): Float {
         if (pressureReadings.size >= maxBufferSize) {
-            pressureReadings.removeAt(0) // Remove oldest reading
+            pressureReadings.removeAt(0)
         }
         pressureReadings.add(newReading)
         return pressureReadings.average().toFloat()

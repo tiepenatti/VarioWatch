@@ -62,6 +62,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var qnhState: StateFlow<Float>
     private lateinit var _useMetricUnitsState: MutableStateFlow<Boolean>
     private lateinit var useMetricUnitsState: StateFlow<Boolean>
+    private lateinit var _volumeLevelState: MutableStateFlow<Int> // Added for volume
+    private lateinit var volumeLevelState: StateFlow<Int>       // Added for volume
 
     private data class MainActivityUiState(
         val isVarioRunning: Boolean = false,
@@ -128,6 +130,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         userPreferences = (application as VarioWatchApplication).userPreferences
 
+        // Ask for notification permission right away
         askNotificationPermission()
 
         // Initialize StateFlows
@@ -135,6 +138,8 @@ class MainActivity : ComponentActivity() {
         qnhState = _qnhState.asStateFlow()
         _useMetricUnitsState = MutableStateFlow(userPreferences.useMetricUnits)
         useMetricUnitsState = _useMetricUnitsState.asStateFlow()
+        _volumeLevelState = MutableStateFlow(userPreferences.getVolumeLevel()) // Initialize volume state
+        volumeLevelState = _volumeLevelState.asStateFlow()                     // Initialize volume state
 
         // Use LocalBroadcastManager to register the receiver
         LocalBroadcastManager.getInstance(this).registerReceiver(
@@ -151,6 +156,7 @@ class MainActivity : ComponentActivity() {
                         val currentUiState by uiState.collectAsState()
                         // Collect states
                         val currentUseMetricUnits by useMetricUnitsState.collectAsState()
+                        val currentVolumeLevel by volumeLevelState.collectAsState() // Collect volume state
 
                         if (currentUiState.showSettings) {
                             SettingsContent(
@@ -158,6 +164,11 @@ class MainActivity : ComponentActivity() {
                                 onToggleUnits = {
                                     userPreferences.toggleUnitSystem()
                                     _useMetricUnitsState.value = userPreferences.useMetricUnits
+                                },
+                                currentVolumeLevel = currentVolumeLevel, // Pass current volume
+                                onVolumeChange = { newLevel ->           // Pass volume change handler
+                                    userPreferences.updateVolumeLevel(newLevel)
+                                    _volumeLevelState.value = newLevel
                                 },
                                 onBackClick = { toggleSettings(false) },
                                 currentAltitude = currentUiState.currentAltitude,

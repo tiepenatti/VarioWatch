@@ -11,20 +11,21 @@ import android.media.AudioTrack
 import android.os.Binder
 import android.os.IBinder
 import android.util.Log
-import androidx.localbroadcastmanager.content.LocalBroadcastManager // Import LocalBroadcastManager
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import kotlinx.coroutines.*
 import kotlin.math.*
-import kotlin.coroutines.coroutineContext // Add import for coroutineContext
+import kotlin.coroutines.coroutineContext
+import android.content.SharedPreferences
 
-class SoundSynthesizerService : Service() {
+class SoundSynthesizerService : Service(), SharedPreferences.OnSharedPreferenceChangeListener { // Implemented SharedPreferences.OnSharedPreferenceChangeListener
 
     private val TAG = "SoundSynthesizerService"
     private var audioTrack: AudioTrack? = null
     private var isPlaying = false
     private var currentFrequency = 0.0
-    private var currentVolume = SoundConstants.DEFAULT_VOLUME / SoundConstants.VOLUME_LEVELS.toFloat() // Normalized volume
-    // private var shouldBeepForClimb = false // No longer needed, behavior driven by profile
-
+    // currentVolume will now be a multiplier from 0.0f to 1.0f, updated from preferences
+    private var currentVolume: Float = 1.0f // Default to full volume, will be updated from prefs
+    
     // New properties for sound profile
     private var varioSoundConfig: VarioSoundConfig? = null
     private var currentCycleMillis: Int = 1000 // Default cycle duration
@@ -37,6 +38,7 @@ class SoundSynthesizerService : Service() {
     private var toneJob: Job? = null
 
     private val binder = LocalBinder()
+    private lateinit var sharedPrefs: SharedPreferences // Added for listening to preference changes
 
     inner class LocalBinder : Binder() {
         fun getService(): SoundSynthesizerService = this@SoundSynthesizerService
@@ -51,7 +53,7 @@ class SoundSynthesizerService : Service() {
                 Log.d(TAG, "Received vertical speed broadcast: $verticalSpeed (previous: $previousVerticalSpeed)")
                 if (!verticalSpeed.isNaN()) {
                     updateSound(verticalSpeed)
-                    this@SoundSynthesizerService.previousVerticalSpeed = verticalSpeed // Update after processing
+                    this@SoundSynthesizerService.previousVerticalSpeed = verticalSpeed
                 } else {
                     Log.w(TAG, "Received NaN vertical speed")
                 }
@@ -64,43 +66,68 @@ class SoundSynthesizerService : Service() {
     override fun onCreate() {
         super.onCreate()
         userPreferences = (applicationContext as VarioWatchApplication).userPreferences
+        // Initialize SharedPreferences for listening to changes
+        sharedPrefs = applicationContext.getSharedPreferences("vario_prefs", Context.MODE_PRIVATE)
+        sharedPrefs.registerOnSharedPreferenceChangeListener(this)
 
-        // Load the sound profile
+
         varioSoundConfig = SoundProfileParser.loadFromAssetsOrInternal(this, "sound_profile.txt")
         if (varioSoundConfig == null) {
             Log.e(TAG, "Failed to load sound_profile.txt. Sound will be disabled or use fallback if implemented.")
-            // Consider implementing a fallback to default hardcoded sounds or disabling sound
         } else {
             Log.i(TAG, "Sound profile loaded successfully.")
         }
 
         setupAudioTrack()
-        // Use LocalBroadcastManager to register the receiver
         LocalBroadcastManager.getInstance(this).registerReceiver(
             verticalSpeedReceiver,
             IntentFilter(VarioService.ACTION_PRESSURE_UPDATE)
         )
         Log.d(TAG, "Receiver registered with LocalBroadcastManager")
 
-        updateAmplitudeFromPreferences() // Initialize amplitude from preferences
+        updateCurrentVolumeFromPreferences() // Initial volume setup from preferences
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "Service started")
-        // Keep the service running
-        return START_STICKY
+        return START_STICKY // Keep the service running
     }
 
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "Service destroying")
-        // Use LocalBroadcastManager to unregister the receiver
         LocalBroadcastManager.getInstance(this).unregisterReceiver(verticalSpeedReceiver)
+        sharedPrefs.unregisterOnSharedPreferenceChangeListener(this) // Unregister listener
         stopSound()
         audioTrack?.release()
         audioTrack = null
         serviceJob.cancel() // Cancel coroutines
         Log.d(TAG, "Service destroyed")
+    }
+
+    // This method is called when a shared preference is changed.
+    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
+        if (key == "volume_level") {
+            Log.d(TAG, "Volume preference changed, updating volume.")
+            updateCurrentVolumeFromPreferences()
+        }
+    }
+
+    private fun updateCurrentVolumeFromPreferences() {
+        val volumeLevel = userPreferences.getVolumeLevel() // Reads from SharedPreferences via UserPreferences instance
+        val newVolumeMultiplier = when (volumeLevel) {
+            0 -> 0.0f  // Off
+            1 -> 0.33f // Low
+            2 -> 0.66f // Med
+            3 -> 1.0f  // High
+            else -> 0.0f // Default to off for unexpected values (or userPreferences default)
+        }
+        if (this.currentVolume != newVolumeMultiplier) {
+            this.currentVolume = newVolumeMultiplier
+            Log.i(TAG, "Volume updated: level=$volumeLevel, multiplier=${this.currentVolume}")
+        } else {
+            Log.d(TAG, "Volume preference read, but currentVolume multiplier is already up-to-date: ${this.currentVolume}")
+        }
     }
 
     private fun setupAudioTrack() {
@@ -141,14 +168,16 @@ class SoundSynthesizerService : Service() {
 
         val config = varioSoundConfig ?: run {
             Log.w(TAG, "VarioSoundConfig not loaded, cannot update sound.")
-            if (isPlaying) stopSound()
+            if (isPlaying) {
+                stopSound()
+            }
             return
         }
 
         val soundParams = config.getSoundParameters(verticalSpeed)
         var playThisIteration = false
 
-        if (soundParams != null && soundParams.first > 0 && soundParams.third > 0) { // Check hertz > 0 and dutyPercent > 0
+        if (soundParams != null && soundParams.first > 0 && soundParams.third > 0) {
             val (hertz, cycleMillis, dutyPercent) = soundParams
             currentFrequency = hertz.toDouble().coerceIn(0.0, SoundConstants.SAMPLE_RATE / 2.0)
             currentCycleMillis = cycleMillis
@@ -172,13 +201,11 @@ class SoundSynthesizerService : Service() {
                     playThisIteration = true
                     Log.d(TAG, "Start playing (vs: $verticalSpeed). ClimbOn: ${config.climbToneOnThreshold}, SinkOn: ${config.sinkToneOnThreshold}.")
                 } else {
-                    // In dead zone for starting, remain silent
                     playThisIteration = false
                     Log.d(TAG, "In dead zone for starting (vs: $verticalSpeed). ClimbOn: ${config.climbToneOnThreshold}, SinkOn: ${config.sinkToneOnThreshold}.")
                 }
             }
         } else {
-            // Profile indicates silence (0 Hz or 0% duty or null params)
             Log.d(TAG, "Profile indicates silence for VSpeed: $verticalSpeed. Params: $soundParams")
             currentFrequency = 0.0
             currentCycleMillis = 1000 // Reset to a default silent cycle
@@ -231,14 +258,14 @@ class SoundSynthesizerService : Service() {
              Log.w(TAG, "stopSound called but not playing or audioTrack is null. isPlaying=$isPlaying, audioTrack=$audioTrack")
              return
         }
-        Log.i(TAG, "Attempting to stop sound playback...") // Use Info level
-        toneJob?.cancel() // Stop the generation loop
+        Log.i(TAG, "Attempting to stop sound playback...") 
+        toneJob?.cancel() 
         toneJob = null
         try {
              audioTrack?.pause()
              audioTrack?.flush()
              audioTrack?.stop()
-             Log.i(TAG, "AudioTrack playback stopped successfully.") // Confirm success
+             Log.i(TAG, "AudioTrack playback stopped successfully.") 
         } catch (e: IllegalStateException) {
              Log.e(TAG, "Exception during AudioTrack stop/pause/flush", e)
         } finally {
@@ -258,14 +285,14 @@ class SoundSynthesizerService : Service() {
         }
         val buffer = ShortArray(bufferSize)
         var angle = 0.0
-        var samplesIntoCurrentCycle = 0 // Tracks sample position within the custom cycle
+        var samplesIntoCurrentCycle = 0
 
         Log.i(TAG, "Starting new tone generation loop. Buffer size: $bufferSize")
 
         while (coroutineContext.isActive) { // Use coroutineContext.isActive for cooperative cancellation
             // Capture current parameters safely for this iteration of the loop
             val localFreq = this.currentFrequency
-            val localVol = this.currentVolume
+            val localVolMultiplier = this.currentVolume // Use the updated currentVolume
             val localCycleMillis = this.currentCycleMillis
             val localDutyPercent = this.currentDutyPercent
 
@@ -288,7 +315,7 @@ class SoundSynthesizerService : Service() {
                 val onSamplesInCycle = (totalSamplesInCycle * (localDutyPercent / 100.0)).toInt()
 
                 val angularIncrement = 2.0 * PI * localFreq / SoundConstants.SAMPLE_RATE
-                val amplitude = (Short.MAX_VALUE * localVol).toInt()
+                val amplitude = (Short.MAX_VALUE * localVolMultiplier).toInt() // Use localVolMultiplier
 
                 for (i in buffer.indices) {
                     if (samplesIntoCurrentCycle < onSamplesInCycle) {
@@ -324,32 +351,7 @@ class SoundSynthesizerService : Service() {
         // If the loop exits unexpectedly, stopSound() should ideally be called by the error handling logic.
     }
 
-    // TODO: Add methods to control volume if needed via binding
-    fun setVolume(level: Int) {
-        val normalizedLevel = level.coerceIn(0, SoundConstants.VOLUME_LEVELS)
-        currentVolume = normalizedLevel / SoundConstants.VOLUME_LEVELS.toFloat()
-        Log.d(TAG, "Volume set to level $level (normalized: $currentVolume)")
-        // Amplitude is updated dynamically in the generation loop
-    }
-
-    private var amplitudeMultiplier: Float = 1.0f // Default multiplier for amplitude
-
-    fun setAmplitudeMultiplier(multiplier: Float) {
-        amplitudeMultiplier = multiplier.coerceAtLeast(1.0f) // Ensure multiplier is at least 1.0
-        Log.d(TAG, "Amplitude multiplier set to $amplitudeMultiplier")
-    }
-
-    // Add logic to read the volume level from user preferences and adjust the amplitude multiplier
-    private fun updateAmplitudeFromPreferences() {
-        val volumeLevel = userPreferences.getVolumeLevel() // Assume this method exists
-        val multiplier = when (volumeLevel) {
-            0 -> 0.0f // No sound
-            1 -> 0.33f // Low
-            2 -> 0.66f // Medium
-            3 -> 1.0f // High
-            else -> 1.0f // Default to High if invalid
-        }
-        setAmplitudeMultiplier(multiplier)
-        Log.d(TAG, "Amplitude updated based on preferences: level=$volumeLevel, multiplier=$multiplier")
-    }
+    // Removed setVolume(level: Int) method as volume is now controlled by preferences.
+    // Removed amplitudeMultiplier and setAmplitudeMultiplier as currentVolume directly holds the multiplier.
+    // Removed updateAmplitudeFromPreferences as its logic is now in updateCurrentVolumeFromPreferences.
 }

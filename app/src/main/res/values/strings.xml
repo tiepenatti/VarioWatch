@@ -44,6 +44,6 @@
     <string name="volume_settings">Volume Settings</string>
     <string name="volume_off">Off</string>
     <string name="volume_low">Low</string>
-    <string name="volume_medium">Medium</string>
+    <string name="volume_medium">Med</string>
     <string name="volume_high">High</string>
 </resources>

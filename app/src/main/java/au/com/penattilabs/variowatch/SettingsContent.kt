@@ -15,6 +15,8 @@ import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 fun SettingsContent(
     useMetricUnits: Boolean,
     onToggleUnits: () -> Unit,
+    currentVolumeLevel: Int, // Added to receive current volume level
+    onVolumeChange: (Int) -> Unit, // Added to handle volume changes
     onBackClick: () -> Unit,
     currentAltitude: Float,
     onAdjustAltitude: (increase: Boolean) -> Unit,
@@ -94,12 +96,12 @@ fun SettingsContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Button(
-                    onClick = { userPreferences.updateVolumeLevel((userPreferences.getVolumeLevel() - 1).coerceAtLeast(0)) },
+                    onClick = { onVolumeChange((currentVolumeLevel - 1).coerceAtLeast(0)) }, // Use onVolumeChange
                     modifier = Modifier.padding(4.dp),
                 ) { Text("-") }
 
                 Text(
-                    text = when (userPreferences.getVolumeLevel()) {
+                    text = when (currentVolumeLevel) { // Use currentVolumeLevel from parameter
                         0 -> stringResource(R.string.volume_off)
                         1 -> stringResource(R.string.volume_low)
                         2 -> stringResource(R.string.volume_medium)
@@ -110,7 +112,7 @@ fun SettingsContent(
                 )
 
                 Button(
-                    onClick = { userPreferences.updateVolumeLevel((userPreferences.getVolumeLevel() + 1).coerceAtMost(3)) },
+                    onClick = { onVolumeChange((currentVolumeLevel + 1).coerceAtMost(3)) }, // Use onVolumeChange
                     modifier = Modifier.padding(4.dp),
                 ) { Text("+") }
             }
