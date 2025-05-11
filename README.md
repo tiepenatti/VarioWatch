@@ -1,5 +1,7 @@
 # VarioWatch
 
+<img src="doc/img/VarioWatch.jpg" alt="VarioWatch" width="600"/>
+
 A Wear OS application that turns your smartwatch into a variometer for paragliding and hang gliding.
 
 ## Overview
@@ -81,7 +83,7 @@ To deploy on Android watch, you need to
 
 ## License
 
-MIT
+See [License](LICENSE) file.
 
 ## Contributing
 
